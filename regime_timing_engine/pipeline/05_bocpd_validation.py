@@ -56,7 +56,7 @@ def fit_pooled_hazard(df: pd.DataFrame, max_duration: int = 3000):
 
 
 def run_bocpd(z_series: np.ndarray, hazard_fn, max_run_length=None):
-    bocpd = BOCPD(hazard_fn=hazard_fn, mu0=0.0, kappa0=0.5, alpha0=1.0, beta0=1.0,
+    bocpd = BOCPD(hazard_fn=hazard_fn, mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0,
                    max_run_length=max_run_length)
     results = [bocpd.step(z_t) for z_t in z_series]
     return bocpd, results
@@ -71,15 +71,18 @@ def check_normalization(results, tol=1e-6):
     print("通过：每一步 run-length 后验均正确归一化。\n")
 
 
-def evaluate_detection_lag(df: pd.DataFrame, results, low_r_threshold: int = 5,
-                            prob_threshold: float = 0.5):
+def evaluate_detection_lag(df: pd.DataFrame, results, prob_threshold: float = 0.5):
     """
     B. 检测滞后评估（重要修正）：
     最初版本直接用 P(r_t=0|x_1:t) 作为触发信号，但可证明该量在数学上恒等于
     hazard期望本身、与观测数据无关（详见 engine/bocpd.py 模块说明）。
-    正确做法：改用累积概率 P(r_t<=K) 作为检测信号。
+    正确做法：改用累积概率 P(r_t<=k) 作为检测信号——直接复用每个
+    BOCPDStepResult 自带的 prob_recent_reset 字段（k=3，定义见
+    engine/bocpd.py），不再在这里另外用一个不同的 k 重复实现一遍同样的
+    概念（此前这里曾用 low_r_threshold=5 独立算过一份，和 BOCPD 内置的
+    k=3 不一致，属于同一件事两处硬编码，现已统一为一处）。
     """
-    cum_low_r_probs = np.array([r.run_length_posterior[:low_r_threshold + 1].sum() for r in results])
+    cum_low_r_probs = np.array([r.prob_recent_reset for r in results])
     map_run_lengths = np.array([r.map_run_length for r in results])
 
     true_changepoint_idx = [i for i in df.index[df["regime_age_true"] == 1].tolist() if i > 0]
@@ -103,7 +106,7 @@ def evaluate_detection_lag(df: pd.DataFrame, results, low_r_threshold: int = 5,
     detected_pct = np.mean(~np.isnan(lags)) * 100
     mean_lag = np.nanmean(lags) if detected_pct > 0 else np.nan
 
-    print(f"=== B. 检测滞后评估（信号=P(r_t<={low_r_threshold})，阈值={prob_threshold}）===")
+    print(f"=== B. 检测滞后评估（信号=BOCPD内置prob_recent_reset, 阈值={prob_threshold}）===")
     print(f"真实变点总数: {len(true_changepoint_idx)}")
     print(f"在窗口内被检测到的比例: {detected_pct:.1f}%")
     print(f"平均检测滞后: {mean_lag:.2f} 天\n")

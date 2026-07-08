@@ -73,12 +73,11 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
             continue
 
         z_t = row["z"]
-        log_sigma_t = np.log(row["realized_vol"])
         regime_names = assigner.names
 
         posterior_prev = np.exp(bocpd.log_run_length_posterior)
-        mu_hat_prev = float(np.sum(posterior_prev * bocpd.emission.mu))
-        regime_probs = assigner.assign(np.array([mu_hat_prev, log_sigma_t]))
+        mu_hat_prev, sigma_hat_prev = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
+        regime_probs = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))
         map_regime = regime_names[int(np.argmax(regime_probs))]
 
         run_lengths = np.arange(bocpd.n_hypotheses)

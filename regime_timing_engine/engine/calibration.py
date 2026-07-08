@@ -16,19 +16,31 @@ oracle上限参照场景中使用，见 04、06 脚本）。
   两者应该分开跑、分开报告，不能把 oracle 版本的绩效当成引擎的真实绩效。
 
 核心函数 estimate_regime_params_causal：
-  1. 对历史窗口的特征 [z的10日滚动均值, log(已实现波动)] 做 KMeans 无监督聚类
-     （不使用真实标签），得到 K 个"数据驱动的区制"。
-  2. 按聚类簇的历史平均收益从高到低命名（仅用于可读性，不影响计算）。
-  3. 用聚类标签序列（而非真实标签）切分连续段，对每个聚类簇拟合久期模型
+  1. 先跑一遍"影子 BOCPD"过一遍历史窗口（用简单常数hazard，此刻还没有任何
+     区制信息，这一步本身就是从零开始识别区制），逐日记录后验加权的
+     [μ̂t, σ̂t]——这正是文档§3.6"run-length后验加权的发射描述子[μ̂t,σ̂t]"
+     的字面定义，两个维度都来自同一个一维NIW/NIG发射模型的后验，不掺杂
+     任何外部特征（如原始已实现波动率）。
+  2. 对这条 [μ̂t, σ̂t] 轨迹做 KMeans 无监督聚类（不使用真实标签），得到 K 个
+     "数据驱动的区制"。
+  3. 按聚类簇的历史平均收益从高到低命名（仅用于可读性，不影响计算）。
+  4. 用聚类标签序列（而非真实标签）切分连续段，对每个聚类簇拟合久期模型
      （复用 engine.duration 的通用函数）——duration_family 参数决定拟合哪一族：
        "geometric" ：几何久期（HMM隐含假设，hazard恒为常数），供 S2/S3 使用，
                      确保 S2/S3 阶段还没有引入"久期升级"这个变量。
        "negbinom"  ：负二项久期（HSMM，hazard随年龄变化），供 S4/S5 使用。
      这个开关是 S3→S4 消融能否成立的关键：两者除了 duration_family 不同，
      其余全部一致，绩效落差才能干净地归因于"HSMM久期升级"本身。
-  4. 用聚类条件的历史收益均值/方差做分数凯利标定目标暴露（复用
+  5. 用聚类条件的历史收益均值/方差做分数凯利标定目标暴露（复用
      engine.decision.calibrate_target_exposures）。
   全部计算只读取传入的 hist_df，不接触调用方之外的任何"未来"信息。
+
+注：早期版本这里直接用"z的滚动均值 + log(原始已实现波动率)"做聚类特征，
+第二维绕开了 BOCPD 自己的后验、直接引入外部原始波动率——这样做的区制
+判别力更强（原始波动率未被z_t的归一化压制），但与文档§3.6"发射描述子"
+的字面定义不符（且和线上逐日软分配时用的描述子不是同一个坐标系）。现已
+改为严格对齐文档定义，代价是判别力可能下降（pipeline/03已验证z_t自身
+的信号偏弱），这是字面对齐文档后预期会出现的效果，不是bug。
 """
 
 from __future__ import annotations
@@ -36,16 +48,38 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
+from .bocpd import BOCPD
 from .duration import extract_segment_durations_from_labels, fit_regime_duration_models, fit_geometric_duration
 from .regime import RegimePrototype, RegimeSoftAssigner
 from .decision import calibrate_target_exposures
 
 
+def compute_posterior_descriptor_trajectory(z_series: np.ndarray, pooled_hazard: float = 0.01):
+    """
+    跑一遍"影子" BOCPD（不影响任何实际仓位决策），逐日记录后验加权的
+    [μ̂t, σ̂t]（对应文档§3.6「发射描述子」的字面定义）。
+
+    hazard 在这一步取一个粗糙的常数：聚类估参本身就是"从零开始识别区制"
+    这一步，此刻还没有任何区制信息可用来构造更精细的hazard（HSMM久期升级
+    是S4/S5才引入的东西，不在这一步）。
+
+    返回: (mu_hats, sigma_hats)，长度均为 len(z_series)。
+    """
+    bocpd = BOCPD(hazard_fn=lambda r: pooled_hazard, mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
+    mu_hats = np.empty(len(z_series))
+    sigma_hats = np.empty(len(z_series))
+    for i, z_t in enumerate(z_series):
+        posterior_prev = np.exp(bocpd.log_run_length_posterior)
+        mu_hats[i], sigma_hats[i] = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
+        bocpd.step(z_t)
+    return mu_hats, sigma_hats
+
+
 def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duration: int = 2000,
                                    kmeans_seed: int = 0, duration_family: str = "negbinom"):
     """
-    hist_df: 必须至少包含 ['z', 'realized_vol', 'log_return'] 三列，且严格只
-             包含当前决策时点"之前"的观测（由调用方保证，本函数不做时间校验）。
+    hist_df: 必须至少包含 ['z', 'log_return'] 两列，且严格只包含当前决策
+             时点"之前"的观测（由调用方保证，本函数不做时间校验）。
     k: 聚类簇数（区制数）。
     duration_family: "geometric"（S2/S3，hazard恒为常数） 或 "negbinom"（S4/S5，
                       hazard随年龄变化，即HSMM久期升级）。
@@ -62,10 +96,8 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
             f"调用方应在样本不足时跳过重估、沿用上一版参数或走保守缺省仓位。"
         )
 
-    feat = np.column_stack([
-        hist_df["z"].rolling(10, min_periods=1).mean().values,
-        np.log(hist_df["realized_vol"].values),
-    ])
+    mu_hats, sigma_hats = compute_posterior_descriptor_trajectory(hist_df["z"].values)
+    feat = np.column_stack([mu_hats, sigma_hats])
     feature_scale = np.array([feat[:, 0].std(), feat[:, 1].std()])
     feature_scale = np.where(feature_scale < 1e-8, 1.0, feature_scale)  # 数值保护
     feat_std = feat / feature_scale

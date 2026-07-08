@@ -85,7 +85,7 @@ def fit_unsupervised_prototypes_and_check_identifiability(df: pd.DataFrame, regi
 
 
 def run_online_with_regime_mixture(df: pd.DataFrame, assigner: RegimeSoftAssigner):
-    bocpd = BOCPD(hazard_fn=lambda r: 0.01, mu0=0.0, kappa0=0.5, alpha0=1.0, beta0=1.0)
+    bocpd = BOCPD(hazard_fn=lambda r: 0.01, mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
     regime_names = assigner.names
     records = []
 

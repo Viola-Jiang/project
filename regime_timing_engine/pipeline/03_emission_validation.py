@@ -30,7 +30,7 @@ RESULTS_DIR = REPO_ROOT / "outputs" / "results"
 FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
-from engine.emission import NIGConjugateEmission, batch_nig_posterior  # noqa: E402
+from engine.emission import NIWConjugateEmission, batch_nig_posterior  # noqa: E402
 from engine.plotting import setup_cjk_font  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -43,16 +43,20 @@ def test_incremental_matches_batch():
     x = rng.normal(loc=0.3, scale=1.5, size=200)
     mu0, kappa0, alpha0, beta0 = 0.0, 1.0, 1.0, 1.0
 
-    emission = NIGConjugateEmission(mu0, kappa0, alpha0, beta0)
+    emission = NIWConjugateEmission.from_nig(mu0, kappa0, alpha0, beta0)
     for xi in x:
         emission.update(xi)
-    online_mu, online_kappa, online_alpha, online_beta = (
-        emission.mu[-1], emission.kappa[-1], emission.alpha[-1], emission.beta[-1])
+    # NIWConjugateEmission用nu/psi参数化(D=1时 nu=2*alpha, psi=2*beta)，
+    # 换算回NIG记号(mu,kappa,alpha,beta)以便与batch_nig_posterior的输出对比
+    online_mu = emission.mu[-1, 0]
+    online_kappa = emission.kappa[-1]
+    online_alpha = emission.nu[-1] / 2.0
+    online_beta = emission.psi[-1, 0, 0] / 2.0
 
     batch_mu, batch_kappa, batch_alpha, batch_beta = batch_nig_posterior(
         x, mu0, kappa0, alpha0, beta0)
 
-    print("=== A. 正确性校验：在线增量递归 vs 批量闭式公式 ===")
+    print("=== A. 正确性校验：在线增量递归(NIW记号换算回NIG) vs 批量闭式公式 ===")
     print(f"{'参数':<8}{'在线递归':>15}{'批量闭式':>15}{'绝对误差':>15}")
     for name, on, ba in [("mu", online_mu, batch_mu), ("kappa", online_kappa, batch_kappa),
                           ("alpha", online_alpha, batch_alpha), ("beta", online_beta, batch_beta)]:
@@ -91,7 +95,7 @@ def test_within_segment_convergence_and_changepoint_sensitivity():
     print(f"=== B. 行为验证：选取一个真实 '{regime_name}' 区制段（长度={len(seg)}天）===")
     print(f"该段 z_t 的样本均值={true_mu:.4f}, 样本标准差={true_sigma:.4f}\n")
 
-    emission = NIGConjugateEmission(mu0=0.0, kappa0=0.5, alpha0=1.0, beta0=1.0)
+    emission = NIWConjugateEmission.from_nig(mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
     convergence_trace = []
     for age, z_t in enumerate(seg["z"].values, start=1):
         log_pi = emission.predictive_logpdf(z_t)[-1]
@@ -135,13 +139,13 @@ def test_all_transitions_likelihood_drop(min_length: int = 30):
             continue
         next_obs = df.loc[seg_end_idx + 1]
 
-        emission = NIGConjugateEmission(mu0=0.0, kappa0=0.5, alpha0=1.0, beta0=1.0)
+        emission = NIWConjugateEmission.from_nig(mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
         z_vals = seg["z"].values
         for z_t in z_vals:
             emission.update(z_t)
 
         warm_up = min(10, len(z_vals) // 3)
-        emission2 = NIGConjugateEmission(mu0=0.0, kappa0=0.5, alpha0=1.0, beta0=1.0)
+        emission2 = NIWConjugateEmission.from_nig(mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
         normal_log_pis = []
         for i, z_t in enumerate(z_vals):
             if i >= warm_up:
