@@ -52,7 +52,7 @@ def run_contrast(df: pd.DataFrame, k: int = K_REGIMES, seed: int = 0):
     state_stats = calibrate_state_exposures(smoothed_states, df["log_return"].values, k)
 
     def to_positions(state_seq):
-        out = df[["date", "regime", "log_return"]].rename(columns={"regime": "true_regime"}).copy()
+        out = df[["date", "ref_regime", "log_return"]].copy()
         out["w_held"] = [state_stats[f"state_{s}"]["target_exposure"] for s in state_seq]
         return out
 
@@ -66,11 +66,11 @@ def make_diagnostic_plot(smoothed_df, filtered_df, smoothed_states, filtered_sta
     fig, axes = plt.subplots(3, 1, figsize=(13, 9), sharex=True,
                               gridspec_kw={"height_ratios": [2, 1, 1]})
 
-    seg_id = (smoothed_df["true_regime"] != smoothed_df["true_regime"].shift(1)).cumsum()
+    seg_id = (smoothed_df["ref_regime"] != smoothed_df["ref_regime"].shift(1)).cumsum()
     for _, seg in smoothed_df.groupby(seg_id):
         for ax in axes:
             ax.axvspan(seg["date"].iloc[0], seg["date"].iloc[-1],
-                       color=REGIME_COLORS.get(seg["true_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
+                       color=REGIME_COLORS.get(seg["ref_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
 
     smoothed_equity = np.exp(np.cumsum(smoothed_df["w_held"].shift(1).fillna(0.0) * smoothed_df["log_return"]))
     filtered_equity = np.exp(np.cumsum(filtered_df["w_held"].shift(1).fillna(0.0) * filtered_df["log_return"]))
@@ -111,11 +111,11 @@ if __name__ == "__main__":
 
     print()
     smoothed_metrics = compute_backtest_metrics(smoothed_df["log_return"], smoothed_df["w_held"],
-                                                 regime_labels=smoothed_df["true_regime"])
+                                                 regime_labels=smoothed_df["ref_regime"])
     print_metrics("平滑(Viterbi,含未来信息,不可执行)", smoothed_metrics)
 
     filtered_metrics = compute_backtest_metrics(filtered_df["log_return"], filtered_df["w_held"],
-                                                 regime_labels=filtered_df["true_regime"])
+                                                 regime_labels=filtered_df["ref_regime"])
     print_metrics("滤波(前向算法,严格因果,可执行)", filtered_metrics)
 
     sharpe_gap = smoothed_metrics["sharpe"] - filtered_metrics["sharpe"]

@@ -29,7 +29,7 @@ from engine.evaluation import compute_backtest_metrics, deflated_sharpe_ratio, b
 
 def run_level(name: str, result_df: pd.DataFrame, executable: bool) -> dict:
     m = compute_backtest_metrics(result_df["log_return"], result_df["w_held"],
-                                  regime_labels=result_df["true_regime"])
+                                  regime_labels=result_df["ref_regime"])
     return {
         "level": name, "executable": executable,
         "ann_return": m["ann_return"], "ann_vol": m["ann_vol"], "sharpe": m["sharpe"],
@@ -82,7 +82,7 @@ if __name__ == "__main__":
           "S1看似更好，但那部分优势本就不可能在实盘复现。")
 
     print("\n" + "=" * 78)
-    print("S5：多指数(多种子代理) × 多时间窗 稳健性检验 + 统计去伪")
+    print("S5：单一真实序列多时间窗稳健性检验 + 统计去伪")
     print("=" * 78)
     trials = run_all_trials()
     sharpes = np.array([t["sharpe"] for t in trials])
@@ -98,7 +98,7 @@ if __name__ == "__main__":
 
     s4_sharpe = summary_df[summary_df["level"].str.startswith("S4")].iloc[0]["sharpe"]
     rows.append({
-        "level": "S5-多指数/多窗口稳健性检验", "executable": True,
+        "level": "S5-多时间窗稳健性检验", "executable": True,
         "ann_return": np.nan, "ann_vol": np.nan, "sharpe": sharpes.mean(),
         "calmar": np.nan, "max_dd": np.array([t["max_dd"] for t in trials]).mean(),
         "turnover_rate": np.array([t["turnover_rate"] for t in trials]).mean(),

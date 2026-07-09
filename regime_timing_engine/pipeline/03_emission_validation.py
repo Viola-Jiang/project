@@ -3,12 +3,16 @@ pipeline/03_emission_validation.py
 ====================================
 对应方法论文档 §3.3「共轭发射与 Student-t 预测分布」。
 
+真实数据没有上帝视角的区制标签，B/C 两类验证改用 engine/regime_labeling
+产出的 ref_regime/ref_regime_age——离线全样本HMM给出的**参照标签，不是
+真值**（详见该模块docstring）。
+
 三类验证：
   A. 正确性校验：在线增量递归 vs 批量闭式公式，误差应 < 1e-8。
-  B. 行为验证：段内收敛（后验预测应逼近段内真实mu/sigma）+ 变点敏感性
+  B. 行为验证：段内收敛（后验预测应逼近段内参照均值/标准差）+ 变点敏感性
      （老假设对新区制首个观测的预测似然应骤降）。
-  C. 普遍性检验：遍历全部真实区制转移点，统计似然骤降幅度的整体分布——
-     单个样例的结论未必有代表性，必须看全局。
+  C. 普遍性检验：遍历全部自动标注参照区制转移点，统计似然骤降幅度的整体
+     分布——单个样例的结论未必有代表性，必须看全局。
 
 运行方式：
   python pipeline/03_emission_validation.py   (需先运行 01, 02)
@@ -71,29 +75,29 @@ def test_incremental_matches_batch():
 # ------------------------------------------------------------------
 # B. 行为验证
 # ------------------------------------------------------------------
-def load_synthetic_features():
-    df = pd.read_csv(DATA_DIR / "synthetic_features.csv", parse_dates=["date"])
+def load_features():
+    df = pd.read_csv(DATA_DIR / "features.csv", parse_dates=["date"])
     return df.dropna(subset=["z"]).reset_index(drop=True)
 
 
 def pick_a_clean_segment(df: pd.DataFrame, min_length: int = 60):
-    seg_id = (df["regime_age_true"] == 1).cumsum()
+    seg_id = (df["ref_regime_age"] == 1).cumsum()
     for _, seg in df.groupby(seg_id):
         if len(seg) >= min_length:
             seg_end_idx = seg.index[-1]
             if seg_end_idx + 1 < len(df):
                 return seg, df.loc[seg_end_idx + 1]
-    raise RuntimeError("未找到足够长的区制段，请检查合成数据")
+    raise RuntimeError("未找到足够长的自动标注参照段，请检查数据")
 
 
 def test_within_segment_convergence_and_changepoint_sensitivity():
-    df = load_synthetic_features()
+    df = load_features()
     seg, next_obs = pick_a_clean_segment(df, min_length=80)
-    regime_name = seg["regime"].iloc[0]
-    true_mu, true_sigma = seg["z"].mean(), seg["z"].std()
+    regime_name = seg["ref_regime"].iloc[0]
+    ref_mu, ref_sigma = seg["z"].mean(), seg["z"].std()
 
-    print(f"=== B. 行为验证：选取一个真实 '{regime_name}' 区制段（长度={len(seg)}天）===")
-    print(f"该段 z_t 的样本均值={true_mu:.4f}, 样本标准差={true_sigma:.4f}\n")
+    print(f"=== B. 行为验证：选取一个自动标注参照 '{regime_name}' 区制段（长度={len(seg)}天）===")
+    print(f"该段 z_t 的样本均值={ref_mu:.4f}, 样本标准差={ref_sigma:.4f}\n")
 
     emission = NIWConjugateEmission.from_nig(mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
     convergence_trace = []
@@ -108,18 +112,18 @@ def test_within_segment_convergence_and_changepoint_sensitivity():
     sample_idx = np.linspace(0, len(trace_df) - 1, 5).astype(int)
     print("段内不同阶段的后验预测收敛情况：")
     print(trace_df.loc[sample_idx, ["age", "pred_mu", "pred_scale"]]
-          .assign(true_mu=true_mu, true_sigma=true_sigma).round(4).to_string(index=False))
+          .assign(ref_mu=ref_mu, ref_sigma=ref_sigma).round(4).to_string(index=False))
 
     final_pred_mu, final_pred_scale = trace_df.iloc[-1][["pred_mu", "pred_scale"]]
-    print(f"\n段末预测均值={final_pred_mu:.4f} (真实={true_mu:.4f}), "
-          f"段末预测尺度={final_pred_scale:.4f} (真实={true_sigma:.4f})")
+    print(f"\n段末预测均值={final_pred_mu:.4f} (参照={ref_mu:.4f}), "
+          f"段末预测尺度={final_pred_scale:.4f} (参照={ref_sigma:.4f})")
 
     warm_up = 10
     normal_log_pi = trace_df["log_pi"].iloc[warm_up:].mean()
     changepoint_log_pi = emission.predictive_logpdf(next_obs["z"])[-1]
 
     print(f"\n段内正常观测平均对数预测似然 (排除热身期): {normal_log_pi:.4f}")
-    print(f"变点处（老假设预测新区制'{next_obs['regime']}'首个观测）对数似然: {changepoint_log_pi:.4f}")
+    print(f"变点处（老假设预测新区制'{next_obs['ref_regime']}'首个观测）对数似然: {changepoint_log_pi:.4f}")
     print(f"似然骤降幅度: {normal_log_pi - changepoint_log_pi:.4f}\n")
 
     assert changepoint_log_pi < normal_log_pi, "预期变点处似然应显著低于段内正常水平，但未观测到"
@@ -128,8 +132,8 @@ def test_within_segment_convergence_and_changepoint_sensitivity():
 
 
 def test_all_transitions_likelihood_drop(min_length: int = 30):
-    df = load_synthetic_features()
-    seg_id = (df["regime_age_true"] == 1).cumsum()
+    df = load_features()
+    seg_id = (df["ref_regime_age"] == 1).cumsum()
     segments = [seg for _, seg in df.groupby(seg_id) if len(seg) >= min_length]
 
     records = []
@@ -155,7 +159,7 @@ def test_all_transitions_likelihood_drop(min_length: int = 30):
         changepoint_log_pi = emission.predictive_logpdf(next_obs["z"])[-1]
 
         records.append({
-            "from_regime": seg["regime"].iloc[0], "to_regime": next_obs["regime"],
+            "from_regime": seg["ref_regime"].iloc[0], "to_regime": next_obs["ref_regime"],
             "seg_length": len(seg), "normal_log_pi": normal_log_pi,
             "changepoint_log_pi": changepoint_log_pi, "drop": normal_log_pi - changepoint_log_pi,
         })
@@ -163,17 +167,17 @@ def test_all_transitions_likelihood_drop(min_length: int = 30):
     result_df = pd.DataFrame(records)
     result_df["transition"] = result_df["from_regime"] + "->" + result_df["to_regime"]
 
-    print("=== C. 全部区制转移点的似然骤降统计（普遍性检验）===")
-    print(f"共检验 {len(result_df)} 个真实变点\n")
+    print("=== C. 全部自动标注参照区制转移点的似然骤降统计（普遍性检验）===")
+    print(f"共检验 {len(result_df)} 个自动标注参照变点\n")
     print(result_df.groupby("transition")["drop"].agg(["mean", "std", "count"]).round(4))
 
     pct_positive = (result_df["drop"] > 0).mean() * 100
     print(f"\n整体平均骤降幅度: {result_df['drop'].mean():.4f}")
     print(f"骤降为正的变点占比: {pct_positive:.1f}%")
     if pct_positive < 60:
-        print("\n注意：相当比例的真实变点并未表现出显著的似然骤降 —— 因为 z_t 已做波动率"
-              "归一化，区制间的均值差异本身就不大（尤其bull/sideways之间）。这正是文档"
-              "§2'可选叠加市场宽度'/多维发射 [z_t, sigma_t] 的动机所在。")
+        print("\n注意：相当比例的自动标注参照变点并未表现出显著的似然骤降 —— 因为 z_t 已做"
+              "波动率归一化，区制间的均值差异本身就不大（尤其bull/sideways之间）。这正是"
+              "文档§2'可选叠加市场宽度'/多维发射 [z_t, sigma_t] 的动机所在。")
     return result_df
 
 

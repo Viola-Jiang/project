@@ -20,9 +20,14 @@ engine/duration.py
     GeometricDuration —— 对应 HMM 隐含假设，hazard 恒为常数（无记忆）
 
 离线估参辅助函数（对应文档 §5.1「离线估参」中的"久期分布"一步）：
-  extract_true_segment_durations —— 从价格/标签数据中按连续段切出真实久期样本
-  fit_regime_duration_models     —— 对指定区制分别拟合 NegBinom（HSMM用）与
-                                     Geometric（HMM隐含假设，仅作对照）两套久期模型
+  extract_segment_durations_from_labels —— 给定任意标签序列，按连续段切出
+                                            久期样本（真实数据没有oracle标签，
+                                            这里喂入的是 engine.regime_labeling
+                                            产出的自动标注参照标签，或模型自己
+                                            在线聚类得到的标签）
+  fit_regime_duration_models            —— 对指定区制分别拟合 NegBinom（HSMM用）
+                                            与 Geometric（HMM隐含假设，仅作对照）
+                                            两套久期模型
   这两个函数被 pipeline 中多个阶段复用（久期/hazard验证、区制软分配、仓位映射
   与回测），因此放在 engine 包内而非某个具体的 pipeline 脚本里，避免脚本之间
   互相 import。
@@ -152,14 +157,11 @@ def fit_geometric_duration(mean: float, d_min: int = 1,
 
 def extract_segment_durations_from_labels(labels) -> pd.DataFrame:
     """
-    通用版本：给定任意一串类别标签（可以是"真实区制标签"，也可以是"模型自己
-    在历史上给出的聚类/MAP判定标签"），按值发生变化的位置切分连续段，返回每段
-    的标签与久期。
-
-    这是 extract_true_segment_durations（读取合成数据的真实标签，仅用于离线
-    诊断/oracle上限参照）与「§5.1 因果 walk-forward 估参」（用模型自己对历史
-    的聚类结果切分段落，见 engine/calibration.py）共用的底层实现，只有一份，
-    避免两处逻辑不一致。
+    通用版本：给定任意一串类别标签，按值发生变化的位置切分连续段，返回每段
+    的标签与久期。喂入的标签可以是 engine.regime_labeling 产出的自动标注
+    参照标签（离线诊断，见 pipeline/04、06），也可以是「§5.1 因果 walk-forward
+    估参」里模型自己对历史的聚类结果（见 engine/calibration.py）——两处场景
+    共用这一份底层实现，避免逻辑不一致。
 
     labels: 任意可转换为 pandas.Series 的一维标签序列，按时间顺序排列。
     返回: DataFrame，每行一段，列为 ['regime', 'duration']（列名沿用 'regime'
@@ -169,20 +171,6 @@ def extract_segment_durations_from_labels(labels) -> pd.DataFrame:
     seg_id = (labels != labels.shift(1)).cumsum()
     return pd.DataFrame({"regime": labels, "seg_id": seg_id}).groupby("seg_id").agg(
         regime=("regime", "first"), duration=("regime", "size"))
-
-
-def extract_true_segment_durations(prices_path) -> pd.DataFrame:
-    """
-    从合成/历史数据中按连续段提取每段的真实久期（交易日数）。仅依赖 'regime'
-    列本身的取值变化来切段，不再需要 'regime_age_true' 辅助列。
-
-    注意：这里用的是数据自带的"真实"区制标签，属于 oracle 信息，只应在离线
-    诊断（04）或作为"识别性上限参照"（06 的监督原型）时使用；真正的因果
-    walk-forward 估参（07）必须改用 extract_segment_durations_from_labels
-    喂入"模型自己对历史数据的聚类结果"，而不是这份真实标签。
-    """
-    df = pd.read_csv(prices_path)
-    return extract_segment_durations_from_labels(df["regime"])
 
 
 def fit_regime_duration_models(seg_stats: pd.DataFrame, regime: str, max_duration: int = 2000):

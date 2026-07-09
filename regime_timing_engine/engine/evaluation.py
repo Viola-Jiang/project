@@ -91,19 +91,20 @@ def print_metrics(label: str, metrics: dict) -> None:
 # ============================================================================
 # §6.2 检测滞后：仅适用于基于 BOCPD 的级别（S2-S5），S0/S1 不涉及在线变点检测
 # ============================================================================
-def detection_lag_stats(true_regime_age, changepoint_signal, threshold: float = 0.5,
+def detection_lag_stats(ref_regime_age, changepoint_signal, threshold: float = 0.5,
                          max_search_window: int = 30) -> dict:
     """
-    true_regime_age: 真实段龄序列（每段第一天为1）
+    ref_regime_age: 参照段龄序列（每段第一天为1）——真实数据下由
+        engine.regime_labeling 给出的自动标注参照标签计算得到，不是真值。
     changepoint_signal: 逐日的"变点/重置置信度"信号（如BOCPD的prob_recent_reset）
-    返回: 真实变点总数、检测到的比例、平均检测滞后天数
+    返回: 参照变点总数、检测到的比例、平均检测滞后天数
     """
-    true_regime_age = np.asarray(true_regime_age)
+    ref_regime_age = np.asarray(ref_regime_age)
     changepoint_signal = np.asarray(changepoint_signal)
-    true_cp_idx = [i for i in range(len(true_regime_age)) if true_regime_age[i] == 1 and i > 0]
+    ref_cp_idx = [i for i in range(len(ref_regime_age)) if ref_regime_age[i] == 1 and i > 0]
 
     lags = []
-    for cp_idx in true_cp_idx:
+    for cp_idx in ref_cp_idx:
         detected = False
         for lag in range(max_search_window + 1):
             idx = cp_idx + lag
@@ -118,7 +119,7 @@ def detection_lag_stats(true_regime_age, changepoint_signal, threshold: float = 
     lags = np.array(lags, dtype=float)
 
     return {
-        "n_true_changepoints": len(true_cp_idx),
+        "n_ref_changepoints": len(ref_cp_idx),
         "detected_pct": float(np.mean(~np.isnan(lags)) * 100) if lags.size else np.nan,
         "mean_lag": float(np.nanmean(lags)) if np.any(~np.isnan(lags)) else np.nan,
         "lags": lags,
