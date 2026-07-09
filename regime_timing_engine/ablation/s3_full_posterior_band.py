@@ -66,8 +66,8 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
 
         if assigner is None:
             bocpd.step(row["z"])
-            records.append({"date": row["date"], "true_regime": row["regime"],
-                             "true_regime_age": row["regime_age_true"], "log_return": row["log_return"],
+            records.append({"date": row["date"], "ref_regime": row["ref_regime"],
+                             "ref_regime_age": row["ref_regime_age"], "log_return": row["log_return"],
                              "map_regime": "warmup", "prob_recent_reset": np.nan,
                              "w_raw": 0.0, "w_held": rebalancer.step(0.0, 0.0, "warmup")})
             continue
@@ -92,8 +92,8 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         w_raw = float(np.clip(w_raw, 0.0, 1.0))
         w_held = rebalancer.step(w_raw, result.prob_recent_reset, map_regime)
 
-        records.append({"date": row["date"], "true_regime": row["regime"],
-                         "true_regime_age": row["regime_age_true"], "log_return": row["log_return"],
+        records.append({"date": row["date"], "ref_regime": row["ref_regime"],
+                         "ref_regime_age": row["ref_regime_age"], "log_return": row["log_return"],
                          "map_regime": map_regime, "prob_recent_reset": result.prob_recent_reset,
                          "w_raw": w_raw, "w_held": w_held})
 
@@ -103,11 +103,11 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
 def make_diagnostic_plot(result_df: pd.DataFrame, save_path: Path):
     setup_cjk_font()
     fig, axes = plt.subplots(2, 1, figsize=(13, 7), sharex=True)
-    seg_id = (result_df["true_regime"] != result_df["true_regime"].shift(1)).cumsum()
+    seg_id = (result_df["ref_regime"] != result_df["ref_regime"].shift(1)).cumsum()
     for _, seg in result_df.groupby(seg_id):
         for ax in axes:
             ax.axvspan(seg["date"].iloc[0], seg["date"].iloc[-1],
-                       color=REGIME_COLORS.get(seg["true_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
+                       color=REGIME_COLORS.get(seg["ref_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
 
     w_applied = result_df["w_held"].shift(1).fillna(0.0)
     equity = np.exp(np.cumsum(w_applied * result_df["log_return"]))
@@ -136,7 +136,7 @@ if __name__ == "__main__":
 
     print("=== S3 全后验连续仓位 + 不确定性收缩 + 无交易带 ===")
     metrics = compute_backtest_metrics(result_df["log_return"], result_df["w_held"],
-                                        regime_labels=result_df["true_regime"])
+                                        regime_labels=result_df["ref_regime"])
     print_metrics("S3-全后验+无交易带", metrics)
     print("分区制绩效:")
     for name, s in metrics["by_regime"].items():
@@ -146,8 +146,8 @@ if __name__ == "__main__":
         print(f"调仓间隔天数分布: 中位数={np.median(gap):.0f}天, 最大={gap.max()}天 (验证'非定频'调仓)")
 
     valid = result_df[result_df["map_regime"] != "warmup"].reset_index(drop=True)
-    lag_stats = detection_lag_stats(valid["true_regime_age"].values, valid["prob_recent_reset"].values)
-    print(f"检测滞后: 真实变点{lag_stats['n_true_changepoints']}个, "
+    lag_stats = detection_lag_stats(valid["ref_regime_age"].values, valid["prob_recent_reset"].values)
+    print(f"检测滞后: 自动标注参照变点{lag_stats['n_ref_changepoints']}个, "
           f"检测到{lag_stats['detected_pct']:.1f}%, 平均滞后{lag_stats['mean_lag']:.2f}天")
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)

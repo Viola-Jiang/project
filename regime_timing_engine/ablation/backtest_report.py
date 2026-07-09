@@ -75,7 +75,7 @@ def section_6_2(df: pd.DataFrame):
     print("=" * 78)
     result_df = generate_positions_s4(df)
     metrics = compute_backtest_metrics(result_df["log_return"], result_df["w_held"],
-                                        regime_labels=result_df["true_regime"])
+                                        regime_labels=result_df["ref_regime"])
     print_metrics("S4终版核心", metrics)
 
     print("\n分区制绩效（牛/震荡/危机）：")
@@ -90,9 +90,9 @@ def section_6_2(df: pd.DataFrame):
 
     valid = result_df[result_df["map_regime"] != "warmup"].reset_index(drop=True) \
         if "map_regime" in result_df.columns else result_df
-    if "true_regime_age" in result_df.columns and "prob_recent_reset" in result_df.columns:
-        lag_stats = detection_lag_stats(valid["true_regime_age"].values, valid["prob_recent_reset"].values)
-        print(f"\n检测滞后: 真实变点{lag_stats['n_true_changepoints']}个, "
+    if "ref_regime_age" in result_df.columns and "prob_recent_reset" in result_df.columns:
+        lag_stats = detection_lag_stats(valid["ref_regime_age"].values, valid["prob_recent_reset"].values)
+        print(f"\n检测滞后: 自动标注参照变点{lag_stats['n_ref_changepoints']}个, "
               f"检测到{lag_stats['detected_pct']:.1f}%, 平均滞后{lag_stats['mean_lag']:.2f}天")
 
     return metrics

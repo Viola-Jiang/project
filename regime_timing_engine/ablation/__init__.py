@@ -12,7 +12,8 @@ ablation
                  不依赖 pipeline/ 的任何脚本。
 
 每一级的模块只暴露一个入口函数 generate_positions(df, ...) -> pd.DataFrame，
-统一产出至少包含 ['date','true_regime','log_return','w_held'] 的表，供
+统一产出至少包含 ['date','ref_regime','log_return','w_held'] 的表（ref_regime
+是 engine.regime_labeling 给出的自动标注参照标签，不是真值），供
 run_ablation_summary.py 统一调用 engine.evaluation.compute_backtest_metrics
 评估、汇总成六级对比表。
 

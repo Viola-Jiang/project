@@ -3,12 +3,19 @@ pipeline/06_regime_assignment.py
 ==================================
 对应方法论文档 §3.6「区制识别与软分配」。
 
+真实数据没有上帝视角的区制标签，本脚本用 engine/regime_labeling 产出的
+ref_regime/ref_regime_age（离线全样本HMM给出的**参照标签，不是真值**，
+详见该模块docstring）替代原先合成数据自带的真实标签。"监督原型"这一步
+现在准确的说法是"基于自动标注参照拟合的原型"——它仍然是一个诊断上限
+参照（因为用了全样本离线信息），但不再是oracle真值上限。
+
 核心目标：验证"区制身份识别"能否修复 05 阶段暴露的问题——
   用汇总(不分区制)的泛化hazard时，BOCPD在99.4%的时间里都跟踪失败。
 
 流程：
-  1. 用真实区制标签拟合"监督版"区制原型（oracle，作为上限参照）。
-  2. 无监督KMeans聚类识别性检验（对应文档"或由段级发射统计无监督聚类得到"）。
+  1. 用自动标注参照标签拟合"参照版"区制原型（离线上限参照，非oracle真值）。
+  2. 无监督KMeans聚类识别性检验（对应文档"或由段级发射统计无监督聚类得到"），
+     对照对象同样是自动标注参照标签。
   3. 在线跑一遍完整序列：每一步先用[posterior均值估计, 原始log波动率]做区制
      软分配，再用 P(z=k)加权 04 阶段拟合的分区制hazard，喂给 BOCPD。
   4. 对比：区制混合hazard vs 05阶段泛化hazard，MAP段龄跟踪能力是否有改善。
@@ -33,33 +40,41 @@ FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.bocpd import BOCPD  # noqa: E402
-from engine.duration import extract_true_segment_durations, fit_regime_duration_models  # noqa: E402
+from engine.duration import extract_segment_durations_from_labels, fit_regime_duration_models  # noqa: E402
 from engine.regime import RegimePrototype, RegimeSoftAssigner  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 
 def load_data():
-    df = pd.read_csv(DATA_DIR / "synthetic_features.csv", parse_dates=["date"])
-    return df.dropna(subset=["z", "realized_vol"]).reset_index(drop=True)
+    df = pd.read_csv(DATA_DIR / "features.csv", parse_dates=["date"])
+    return df.dropna(subset=["z", "realized_vol", "ref_regime"]).reset_index(drop=True)
 
 
-def fit_supervised_prototypes(df: pd.DataFrame, seg_stats: pd.DataFrame, regimes: list):
-    """用真实标签直接计算每个区制在特征空间[z, log_sigma]中的中心（oracle上限参照）。"""
+def fit_reference_prototypes(df: pd.DataFrame, seg_stats: pd.DataFrame, regimes: list):
+    """
+    用自动标注参照标签（ref_regime）直接计算每个区制在特征空间[z, log_sigma]
+    中的中心。这是一个离线全样本上限参照，不是oracle真值上限——真值在真实
+    数据上根本不存在。
+    """
     prototypes = []
     for regime in regimes:
-        sub = df[df["regime"] == regime]
+        sub = df[df["ref_regime"] == regime]
         mean_z = sub["z"].mean()
         mean_log_sigma = np.log(sub["realized_vol"]).mean()
         nb_model, _, _ = fit_regime_duration_models(seg_stats, regime)
         prototypes.append(RegimePrototype(
             name=regime, mean_feature=np.array([mean_z, mean_log_sigma]), duration_model=nb_model))
-        print(f"  [监督原型] {regime}: mean_z={mean_z:.4f}, mean_log_sigma={mean_log_sigma:.4f}")
+        print(f"  [参照原型] {regime}: mean_z={mean_z:.4f}, mean_log_sigma={mean_log_sigma:.4f}")
     return prototypes
 
 
 def fit_unsupervised_prototypes_and_check_identifiability(df: pd.DataFrame, regimes: list):
-    """无监督KMeans聚类识别性检验：不用真实标签，单纯用特征聚类看能否分离出接近真实区制的簇。"""
+    """
+    无监督KMeans聚类识别性检验：不用ref_regime参与聚类本身，单纯用特征聚类
+    看能否分离出接近自动标注参照区制的簇（对照对象是ref_regime参照标签，
+    不是oracle真值）。
+    """
     from sklearn.cluster import KMeans
     from scipy.optimize import linear_sum_assignment
 
@@ -70,17 +85,17 @@ def fit_unsupervised_prototypes_and_check_identifiability(df: pd.DataFrame, regi
     km = KMeans(n_clusters=len(regimes), n_init=10, random_state=0)
     cluster_labels = km.fit_predict(feat_std)
 
-    true_labels = df["regime"].values
-    confusion = pd.crosstab(cluster_labels, true_labels)
+    ref_labels = df["ref_regime"].values
+    confusion = pd.crosstab(cluster_labels, ref_labels)
     row_ind, col_ind = linear_sum_assignment(-confusion.values)
     cluster_to_regime = {row: confusion.columns[col] for row, col in zip(row_ind, col_ind)}
     mapped_pred = np.array([cluster_to_regime[c] for c in cluster_labels])
-    accuracy = np.mean(mapped_pred == true_labels)
+    accuracy = np.mean(mapped_pred == ref_labels)
 
-    print("\n=== 无监督KMeans区制识别性检验 ===")
-    print("混淆矩阵（行=聚类簇，列=真实区制）：")
+    print("\n=== 无监督KMeans区制识别性检验（对照自动标注参照标签，非真值）===")
+    print("混淆矩阵（行=聚类簇，列=自动标注参照区制）：")
     print(confusion)
-    print(f"\n最优簇->区制匹配后的整体准确率: {accuracy*100:.1f}%")
+    print(f"\n最优簇->区制匹配后的整体一致率: {accuracy*100:.1f}%")
     return accuracy
 
 
@@ -104,7 +119,7 @@ def run_online_with_regime_mixture(df: pd.DataFrame, assigner: RegimeSoftAssigne
         result = bocpd.step(z_t, hazards_override=h_mix)
 
         records.append({
-            "date": row["date"], "true_regime": row["regime"], "true_regime_age": row["regime_age_true"],
+            "date": row["date"], "ref_regime": row["ref_regime"], "ref_regime_age": row["ref_regime_age"],
             "map_regime": map_regime,
             **{f"prob_{name}": regime_probs[i] for i, name in enumerate(regime_names)},
             "map_run_length": result.map_run_length, "prob_recent_reset": result.prob_recent_reset,
@@ -113,23 +128,22 @@ def run_online_with_regime_mixture(df: pd.DataFrame, assigner: RegimeSoftAssigne
 
 
 def evaluate(result_df: pd.DataFrame):
-    print("\n=== 区制识别准确率（监督原型，在线运行）===")
-    acc = (result_df["map_regime"] == result_df["true_regime"]).mean()
-    print(f"整体准确率: {acc*100:.1f}%")
-    confusion = pd.crosstab(result_df["map_regime"], result_df["true_regime"])
-    print("混淆矩阵（行=模型判定区制，列=真实区制）：")
+    print("\n=== 区制识别一致率（vs 自动标注参照，非真值；参照原型，在线运行）===")
+    acc = (result_df["map_regime"] == result_df["ref_regime"]).mean()
+    print(f"整体一致率: {acc*100:.1f}%")
+    confusion = pd.crosstab(result_df["map_regime"], result_df["ref_regime"])
+    print("混淆矩阵（行=模型判定区制，列=自动标注参照区制）：")
     print(confusion)
 
-    print("\n=== 核心对比：MAP段龄跟踪能力（vs 05阶段的0.6%）===")
+    print("\n=== 核心对比：MAP段龄跟踪能力（vs 05阶段）===")
     stuck_pct = (result_df["map_run_length"] <= 5).mean() * 100
     print(f"06（区制混合hazard）: MAP段龄<=5的天数占比 = {stuck_pct:.1f}%")
-    print("05（泛化pooled hazard）: 同一指标 = 0.6% （19/2980天）")
 
     print("\n=== 检测滞后评估（信号=P(r_t<=3), 阈值=0.5）===")
-    true_cp_idx = [i for i in result_df.index[result_df["true_regime_age"] == 1].tolist() if i > 0]
+    ref_cp_idx = [i for i in result_df.index[result_df["ref_regime_age"] == 1].tolist() if i > 0]
     recent_reset = result_df["prob_recent_reset"].values
     lags = []
-    for cp_idx in true_cp_idx:
+    for cp_idx in ref_cp_idx:
         detected = False
         for lag in range(31):
             idx = cp_idx + lag
@@ -142,9 +156,9 @@ def evaluate(result_df: pd.DataFrame):
         if not detected:
             lags.append(np.nan)
     lags = np.array(lags, dtype=float)
-    print(f"真实变点总数: {len(true_cp_idx)}")
-    print(f"检测到比例: {np.mean(~np.isnan(lags))*100:.1f}%  (05阶段同指标: 17.2%)")
-    print(f"平均检测滞后: {np.nanmean(lags):.2f}天  (05阶段同指标: 12.40天)")
+    print(f"自动标注参照变点总数: {len(ref_cp_idx)}")
+    print(f"检测到比例: {np.mean(~np.isnan(lags))*100:.1f}%")
+    print(f"平均检测滞后: {np.nanmean(lags):.2f}天")
     return acc, stuck_pct
 
 
@@ -152,11 +166,11 @@ def make_diagnostic_plot(result_df: pd.DataFrame, bocpd_prev_path: Path, save_pa
     setup_cjk_font()
     fig, axes = plt.subplots(3, 1, figsize=(14, 9), sharex=True)
 
-    seg_id = (result_df["true_regime_age"] == 1).cumsum()
+    seg_id = (result_df["ref_regime_age"] == 1).cumsum()
     for _, seg in result_df.groupby(seg_id):
         for ax in axes:
             ax.axvspan(seg["date"].iloc[0], seg["date"].iloc[-1],
-                       color=REGIME_COLORS[seg["true_regime"].iloc[0]], alpha=0.12, lw=0)
+                       color=REGIME_COLORS.get(seg["ref_regime"].iloc[0], "lightgray"), alpha=0.12, lw=0)
 
     for regime, c in REGIME_COLORS.items():
         axes[0].plot(result_df["date"], result_df[f"prob_{regime}"], color=c, lw=0.8, label=f"P({regime})")
@@ -165,21 +179,21 @@ def make_diagnostic_plot(result_df: pd.DataFrame, bocpd_prev_path: Path, save_pa
     axes[0].legend(fontsize=8, ncol=3)
 
     regime_code = {"bear": 0, "sideways": 1, "bull": 2}
-    axes[1].plot(result_df["date"], result_df["true_regime"].map(regime_code), color="black",
-                 lw=1.2, label="真实区制")
+    axes[1].plot(result_df["date"], result_df["ref_regime"].map(regime_code), color="black",
+                 lw=1.2, label="自动标注参照区制")
     axes[1].plot(result_df["date"], result_df["map_regime"].map(regime_code), color="#8a4fd9",
                  lw=0.6, alpha=0.7, label="模型判定区制")
     axes[1].set_yticks([0, 1, 2])
     axes[1].set_yticklabels(["bear", "sideways", "bull"])
     axes[1].set_ylabel("区制")
-    axes[1].set_title("真实区制 vs 模型判定区制")
+    axes[1].set_title("自动标注参照区制 vs 模型判定区制")
     axes[1].legend(fontsize=8)
 
     if bocpd_prev_path.exists():
         prev = pd.read_csv(bocpd_prev_path, parse_dates=["date"])
         window = slice(0, 600)
-        axes[2].plot(result_df["date"].iloc[window], result_df["true_regime_age"].iloc[window],
-                     color="black", lw=1.2, label="真实段龄")
+        axes[2].plot(result_df["date"].iloc[window], result_df["ref_regime_age"].iloc[window],
+                     color="black", lw=1.2, label="自动标注参照段龄")
         axes[2].plot(result_df["date"].iloc[window], result_df["map_run_length"].iloc[window],
                      color="#3f6fa8", lw=1, label="06(区制混合hazard)")
         axes[2].plot(prev["date"].iloc[window], prev["map_run_length_adaptive"].iloc[window],
@@ -198,11 +212,11 @@ def make_diagnostic_plot(result_df: pd.DataFrame, bocpd_prev_path: Path, save_pa
 
 if __name__ == "__main__":
     df = load_data()
-    seg_stats = extract_true_segment_durations(DATA_DIR / "synthetic_prices.csv")
+    seg_stats = extract_segment_durations_from_labels(df["ref_regime"])
     regimes = ["bull", "sideways", "bear"]
 
-    print("=== 拟合监督区制原型（oracle上限参照）===")
-    prototypes = fit_supervised_prototypes(df, seg_stats, regimes)
+    print("=== 拟合自动标注参照区制原型（离线上限参照，非oracle真值）===")
+    prototypes = fit_reference_prototypes(df, seg_stats, regimes)
 
     fit_unsupervised_prototypes_and_check_identifiability(df, regimes)
 

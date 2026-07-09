@@ -33,9 +33,9 @@ def generate_positions(df: pd.DataFrame, mode: str = "constant", ma_window: int 
     mode="constant": 恒定满仓，w_held 全程为 1.0
     mode="ma"：经典均线择时，价格高于 ma_window 日均线时满仓，否则空仓
                （只用截至当天的价格，天然因果，不存在前视）
-    返回: DataFrame['date','true_regime','log_return','w_held']
+    返回: DataFrame['date','ref_regime','log_return','w_held']
     """
-    out = df[["date", "regime", "log_return"]].rename(columns={"regime": "true_regime"}).copy()
+    out = df[["date", "ref_regime", "log_return"]].copy()
 
     if mode == "constant":
         out["w_held"] = 1.0
@@ -53,11 +53,11 @@ def make_diagnostic_plot(const_df, ma_df, save_path: Path):
     setup_cjk_font()
     fig, axes = plt.subplots(2, 1, figsize=(13, 7), sharex=True)
 
-    seg_id = (const_df["true_regime"] != const_df["true_regime"].shift(1)).cumsum()
+    seg_id = (const_df["ref_regime"] != const_df["ref_regime"].shift(1)).cumsum()
     for _, seg in const_df.groupby(seg_id):
         for ax in axes:
             ax.axvspan(seg["date"].iloc[0], seg["date"].iloc[-1],
-                       color=REGIME_COLORS.get(seg["true_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
+                       color=REGIME_COLORS.get(seg["ref_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
 
     const_equity = np.exp(np.cumsum(const_df["w_held"].shift(1).fillna(0.0) * const_df["log_return"]))
     ma_equity = np.exp(np.cumsum(ma_df["w_held"].shift(1).fillna(0.0) * ma_df["log_return"]))
@@ -87,11 +87,11 @@ if __name__ == "__main__":
 
     print("=== S0 基线 ===")
     const_metrics = compute_backtest_metrics(const_df["log_return"], const_df["w_held"],
-                                              regime_labels=const_df["true_regime"])
+                                              regime_labels=const_df["ref_regime"])
     print_metrics("S0-恒定满仓(计入主表)", const_metrics)
 
     ma_metrics = compute_backtest_metrics(ma_df["log_return"], ma_df["w_held"],
-                                           regime_labels=ma_df["true_regime"])
+                                           regime_labels=ma_df["ref_regime"])
     print_metrics("S0-均线择时(仅参照)", ma_metrics)
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)

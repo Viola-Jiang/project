@@ -3,18 +3,22 @@ pipeline/04_duration_hazard_validation.py
 ===========================================
 对应方法论文档 §3.4「HMM与HSMM」、§3.5「久期建模、hazard函数与预期剩余久期」。
 
+真实数据没有上帝视角的区制标签，本脚本从 engine/regime_labeling 产出的
+ref_regime（离线全样本HMM给出的**参照标签，不是真值**，详见该模块
+docstring）里提取每个参照区制的历史段长样本。
+
 流程：
-  1. 从 01 生成的合成数据中提取每个区制的"真实历史段长"样本。
+  1. 从 02 生成的特征数据中，按 ref_regime 提取每个参照区制的历史段长样本。
   2. 对每个区制分别拟合 NegBinom 久期分布（HSMM）与 Geometric 久期分布（HMM隐含假设）。
   3. 核心对比：hazard 曲线与预期剩余久期曲线，NegBinom应随年龄变化，Geometric应为常数。
   4. 交叉验证：NegBinom拟合hazard vs 直接从段长样本估计的经验hazard。
 
-注：分区制久期拟合的核心函数（extract_true_segment_durations /
-fit_regime_duration_models）定义在 engine/duration.py 中，被本脚本与后续的
-06、07 共同复用，避免脚本互相 import。
+注：分区制久期拟合的核心函数（extract_segment_durations_from_labels /
+fit_regime_duration_models）定义在 engine/duration.py 中，被本脚本与 06
+共同复用，避免脚本互相 import。
 
 运行方式：
-  python pipeline/04_duration_hazard_validation.py   (需先运行 01)
+  python pipeline/04_duration_hazard_validation.py   (需先运行 01, 02)
 输出：
   outputs/results/04_hazard_curves.csv
   outputs/results/04_segment_durations.csv
@@ -33,7 +37,7 @@ RESULTS_DIR = REPO_ROOT / "outputs" / "results"
 FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
-from engine.duration import extract_true_segment_durations, fit_regime_duration_models  # noqa: E402
+from engine.duration import extract_segment_durations_from_labels, fit_regime_duration_models  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -87,9 +91,10 @@ def make_diagnostic_plot(curves_df: pd.DataFrame, seg_stats: pd.DataFrame, regim
 
 
 if __name__ == "__main__":
-    seg_stats = extract_true_segment_durations(DATA_DIR / "synthetic_prices.csv")
+    features = pd.read_csv(DATA_DIR / "features.csv", parse_dates=["date"]).dropna(subset=["ref_regime"])
+    seg_stats = extract_segment_durations_from_labels(features["ref_regime"])
 
-    print("=== 各区制真实历史段长样本概览 ===")
+    print("=== 各自动标注参照区制历史段长样本概览（非真值，见 engine/regime_labeling.py）===")
     print(seg_stats.groupby("regime")["duration"].agg(["count", "mean", "std", "min", "max"]).round(1))
     print()
 

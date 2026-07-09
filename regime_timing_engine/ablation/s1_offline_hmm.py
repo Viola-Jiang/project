@@ -34,10 +34,10 @@ import matplotlib.pyplot as plt  # noqa: E402
 def generate_positions(df: pd.DataFrame, k: int = K_REGIMES, seed: int = 0):
     """
     对整段历史一次性拟合离线HMM并给出平滑仓位序列（刻意允许前视，见模块docstring）。
-    返回: (DataFrame['date','true_regime','log_return','w_held'], state_stats)
+    返回: (DataFrame['date','ref_regime','log_return','w_held'], state_stats)
     """
     w_target, state_stats = fit_offline_hmm_positions(df, k=k, seed=seed)
-    out = df[["date", "regime", "log_return"]].rename(columns={"regime": "true_regime"}).copy()
+    out = df[["date", "ref_regime", "log_return"]].copy()
     out["w_held"] = w_target.values
     return out, state_stats
 
@@ -46,11 +46,11 @@ def make_diagnostic_plot(result_df: pd.DataFrame, save_path: Path):
     setup_cjk_font()
     fig, axes = plt.subplots(2, 1, figsize=(13, 7), sharex=True)
 
-    seg_id = (result_df["true_regime"] != result_df["true_regime"].shift(1)).cumsum()
+    seg_id = (result_df["ref_regime"] != result_df["ref_regime"].shift(1)).cumsum()
     for _, seg in result_df.groupby(seg_id):
         for ax in axes:
             ax.axvspan(seg["date"].iloc[0], seg["date"].iloc[-1],
-                       color=REGIME_COLORS.get(seg["true_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
+                       color=REGIME_COLORS.get(seg["ref_regime"].iloc[0], "lightgray"), alpha=0.10, lw=0)
 
     w_applied = result_df["w_held"].shift(1).fillna(0.0)
     equity = np.exp(np.cumsum(w_applied * result_df["log_return"]))
@@ -81,7 +81,7 @@ if __name__ == "__main__":
         print(f"  {name}: mu={s['mu']:.5f}, sigma={s['sigma']:.5f}, w*={s['target_exposure']:.2f}")
 
     metrics = compute_backtest_metrics(result_df["log_return"], result_df["w_held"],
-                                        regime_labels=result_df["true_regime"])
+                                        regime_labels=result_df["ref_regime"])
     print_metrics("S1-离线HMM(不可执行)", metrics)
     print("分区制绩效:")
     for name, s in metrics["by_regime"].items():

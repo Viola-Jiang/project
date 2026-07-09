@@ -24,6 +24,6 @@ K_REGIMES = 3            # 区制/隐藏状态数，S1~S5 统一取值，确保"
 
 
 def load_data() -> pd.DataFrame:
-    """六级统一从这里读数据，保证用的是完全相同的一份合成数据、相同的预处理。"""
-    df = pd.read_csv(DATA_DIR / "synthetic_features.csv", parse_dates=["date"])
-    return df.dropna(subset=["z", "realized_vol"]).reset_index(drop=True)
+    """六级统一从这里读数据，保证用的是完全相同的一份真实数据、相同的预处理。"""
+    df = pd.read_csv(DATA_DIR / "features.csv", parse_dates=["date"])
+    return df.dropna(subset=["z", "realized_vol", "ref_regime"]).reset_index(drop=True)

@@ -8,15 +8,19 @@ pipeline/02_feature_engineering.py
   2. 已实现波动    sigma_t = std(r_{t-w+1:t}), w = 20
   3. 波动归一化收益 z_t = r_t / sigma_t   <- BOCPD 的实际"发射观测"
 
+真实数据没有上帝视角的区制标签，本脚本额外调用
+engine/regime_labeling.auto_label_regimes 产出 ref_regime/ref_regime_age
+两列——这是离线全样本HMM给出的**参照标签，不是真值**，只供 pipeline
+03-06 与 ablation 的诊断/评估使用（详见该模块 docstring 的边界说明）。
+
 运行方式：
-  python pipeline/02_feature_engineering.py   (需先运行 01_data_simulation.py)
+  python pipeline/02_feature_engineering.py   (需先运行 01_data_loading.py)
 输出：
-  data/synthetic_features.csv
+  data/features.csv
   outputs/figures/02_feature_engineering.png
 
-注：核心特征计算逻辑已抽到 engine/features.py，因为
-ablation/s5_multi_asset_robustness.py 需要对多份独立合成"指数"复用同一套
-特征计算，本脚本只负责：对主线数据调用一次、存csv、画诊断图。
+注：核心特征计算逻辑已抽到 engine/features.py，因为需要被多个 pipeline/
+ablation 脚本复用，本脚本只负责：对主线数据调用一次、存csv、画诊断图。
 """
 
 import sys
@@ -30,6 +34,7 @@ FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.features import compute_features  # noqa: E402
+from engine.regime_labeling import auto_label_regimes  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -43,15 +48,15 @@ def sanity_checks(df: pd.DataFrame) -> None:
     print("\n全样本描述统计：")
     print(valid[["log_return", "z"]].describe().round(4))
 
-    if "regime" in df.columns:
-        print("\n分区制标准差对比（验证归一化是否抑制了跨区制的波动差异）：")
-        cmp = valid.groupby("regime").agg(r_std=("log_return", "std"), z_std=("z", "std")).round(4)
-        print(cmp)
-        r_cv = cmp["r_std"].std() / cmp["r_std"].mean()
-        z_cv = cmp["z_std"].std() / cmp["z_std"].mean()
-        print(f"\n区制间标准差的变异系数：r_t: {r_cv:.3f}  |  z_t: {z_cv:.3f}")
-        print("（z_t 的变异系数更低，说明归一化确实压抑了跨区制的条件异方差）"
-              if z_cv < r_cv else "（注意：本次结果中 z_t 并未比 r_t 更平稳，需检查窗口设定或数据）")
+    print("\n分区制标准差对比（验证归一化是否抑制了跨区制的波动差异；"
+          "分组用的 ref_regime 是自动标注参照，非真值）：")
+    cmp = valid.groupby("ref_regime").agg(r_std=("log_return", "std"), z_std=("z", "std")).round(4)
+    print(cmp)
+    r_cv = cmp["r_std"].std() / cmp["r_std"].mean()
+    z_cv = cmp["z_std"].std() / cmp["z_std"].mean()
+    print(f"\n区制间标准差的变异系数：r_t: {r_cv:.3f}  |  z_t: {z_cv:.3f}")
+    print("（z_t 的变异系数更低，说明归一化确实压抑了跨区制的条件异方差）"
+          if z_cv < r_cv else "（注意：本次结果中 z_t 并未比 r_t 更平稳，需检查窗口设定或数据）")
 
 
 def make_diagnostic_plot(df: pd.DataFrame, save_path: Path):
@@ -60,16 +65,16 @@ def make_diagnostic_plot(df: pd.DataFrame, save_path: Path):
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.5))
 
     for regime, c in REGIME_COLORS.items():
-        sub = valid[valid["regime"] == regime]["log_return"]
+        sub = valid[valid["ref_regime"] == regime]["log_return"]
         axes[0].hist(sub, bins=40, alpha=0.5, density=True, color=c, label=regime)
-    axes[0].set_title("归一化前：r_t 分区制分布（尺度明显不同）")
+    axes[0].set_title("归一化前：r_t 按自动标注参照分组的分布（尺度明显不同）")
     axes[0].set_xlabel("log_return r_t")
     axes[0].legend()
 
     for regime, c in REGIME_COLORS.items():
-        sub = valid[valid["regime"] == regime]["z"]
+        sub = valid[valid["ref_regime"] == regime]["z"]
         axes[1].hist(sub, bins=40, alpha=0.5, density=True, color=c, label=regime)
-    axes[1].set_title("归一化后：z_t 分区制分布（尺度趋于一致）")
+    axes[1].set_title("归一化后：z_t 按自动标注参照分组的分布（尺度趋于一致）")
     axes[1].set_xlabel("z_t = r_t / sigma_t")
     axes[1].legend()
 
@@ -81,10 +86,21 @@ def make_diagnostic_plot(df: pd.DataFrame, save_path: Path):
 
 
 if __name__ == "__main__":
-    raw = pd.read_csv(DATA_DIR / "synthetic_prices.csv", parse_dates=["date"])
+    raw = pd.read_csv(DATA_DIR / "prices.csv", parse_dates=["date"])
     features = compute_features(raw)
 
-    out_path = DATA_DIR / "synthetic_features.csv"
+    # auto_label_regimes 内部要拟合HMM，不能吃NaN，所以只对warm-up期之后的
+    # 有效样本做自动标注，再按原始index对齐拼回去——warm-up期的
+    # ref_regime/ref_regime_age 保持NaN，与 log_return/realized_vol/z 的
+    # NaN 范围一致，不引入信息。
+    valid_mask = features["z"].notna() & features["realized_vol"].notna()
+    labeled_valid = auto_label_regimes(features.loc[valid_mask].reset_index(drop=True))
+    features["ref_regime"] = pd.NA
+    features["ref_regime_age"] = pd.NA
+    features.loc[valid_mask, "ref_regime"] = labeled_valid["ref_regime"].values
+    features.loc[valid_mask, "ref_regime_age"] = labeled_valid["ref_regime_age"].values
+
+    out_path = DATA_DIR / "features.csv"
     features.to_csv(out_path, index=False)
     print(f"特征已保存 -> {out_path}\n")
 
