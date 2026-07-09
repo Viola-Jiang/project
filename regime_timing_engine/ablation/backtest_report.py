@@ -114,8 +114,8 @@ def section_6_1_and_6_3():
 
     print(f"\n§6.1 防泄漏机制：S2~S5全部为causal walk-forward估参（engine/calibration.py）；"
           f"S5额外用Purged K-Fold + Embargo（engine/evaluation.purged_embargo_windows）"
-          f"把历史切成{len(set((t['seed'] for t in trials)))}条独立路径 × 每条3个带隔离带的"
-          f"不重叠窗口，避免滚动特征跨窗口边界泄漏。")
+          f"把唯一一份真实序列切成{len(trials)}个带隔离带的不重叠时间窗，"
+          f"避免滚动特征跨窗口边界泄漏。")
 
     sharpes = np.array([t["sharpe"] for t in trials])
     print(f"\n§6.3 统计去伪：{len(trials)}次独立试验，夏普均值={sharpes.mean():.2f}，"

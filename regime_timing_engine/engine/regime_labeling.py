@@ -44,22 +44,6 @@ def _name_states_by_return_rank(state_seq: np.ndarray, log_returns: np.ndarray, 
     return {old: names[rank] for rank, old in enumerate(order)}
 
 
-def _fit_best_hmm(df: pd.DataFrame, k: int, n_restarts: int, base_seed: int):
-    """
-    GaussianHMM 的 EM 对随机初始化敏感，单一种子有一定概率收敛到明显更差的
-    局部最优（自转移概率退化到接近0，导致状态逐日翻转、段长全部为1天这种
-    没有诊断价值的解）。用多个随机种子各拟合一次，按对数似然 model.score(feat)
-    取最优，避免因初始化不走运而产出一份质量很差的参照标签。
-    """
-    best_model, best_feat, best_score = None, None, -np.inf
-    for i in range(n_restarts):
-        model, feat = fit_hmm(df, k=k, seed=base_seed + i)
-        score = model.score(feat)
-        if score > best_score:
-            best_model, best_feat, best_score = model, feat, score
-    return best_model, best_feat
-
-
 def auto_label_regimes(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5) -> pd.DataFrame:
     """
     输入: df 至少包含 ['z', 'realized_vol', 'log_return'] 三列（即
@@ -72,9 +56,11 @@ def auto_label_regimes(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: 
     k=3 时按收益排名映射为 bull/sideways/bear，方便直接复用
     engine.plotting.REGIME_COLORS 与全仓库既有的三区制文案/配色。
 
-    n_restarts: 多随机种子重启取对数似然最优的次数，见 _fit_best_hmm。
+    n_restarts: 转发给 fit_hmm 的多随机种子重启次数（见该函数docstring：
+    GaussianHMM 的 EM 对初始化敏感，单一种子有一定概率收敛到没有诊断价值
+    的差解，多重启取对数似然最优可规避）。
     """
-    model, feat = _fit_best_hmm(df, k=k, n_restarts=n_restarts, base_seed=seed)
+    model, feat = fit_hmm(df, k=k, seed=seed, n_restarts=n_restarts)
     state_seq = decode_smoothed(model, feat)
 
     name_of = _name_states_by_return_rank(state_seq, df["log_return"].values, k)

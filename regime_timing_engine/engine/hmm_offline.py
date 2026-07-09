@@ -33,16 +33,30 @@ from hmmlearn.hmm import GaussianHMM
 from .decision import calibrate_target_exposures
 
 
-def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0):
+def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5):
     """
     用 [z, log(realized_vol)] 两维特征、EM 估参拟合 GaussianHMM。
     df 允许是整段历史（含"未来"），这是 S1/§6.4 故意要展示的前视行为。
+
+    GaussianHMM 的 EM 对随机初始化敏感：单一种子有一定概率收敛到明显更差的
+    局部最优（典型症状：某状态自转移概率退化到接近0，导致状态逐日翻转、
+    没有诊断价值），这对 S1 尤其致命——S1 的角色是"允许前视的信息上限参照"，
+    若这里恰好收敛到差的局部最优，S1 可能反而跑不赢因果版本，S1 vs S2 的
+    "前视偏差"量化就失去意义。用 n_restarts 个不同种子各拟合一次，按对数
+    似然 model.score(feat) 取最优，避免因初始化不走运而产出一份质量很差的
+    模型（同一机制也被 engine/regime_labeling.py 的自动标注复用）。
+
     返回: (拟合好的模型, 特征矩阵)
     """
     feat = np.column_stack([df["z"].values, np.log(df["realized_vol"].values)])
-    model = GaussianHMM(n_components=k, covariance_type="full", n_iter=200, random_state=seed)
-    model.fit(feat)
-    return model, feat
+    best_model, best_score = None, -np.inf
+    for i in range(n_restarts):
+        model = GaussianHMM(n_components=k, covariance_type="full", n_iter=200, random_state=seed + i)
+        model.fit(feat)
+        score = model.score(feat)
+        if score > best_score:
+            best_model, best_score = model, score
+    return best_model, feat
 
 
 def decode_smoothed(model: GaussianHMM, feat: np.ndarray) -> np.ndarray:
@@ -102,12 +116,12 @@ def calibrate_state_exposures(state_seq: np.ndarray, log_returns: np.ndarray, k:
     return state_stats
 
 
-def fit_offline_hmm_positions(df: pd.DataFrame, k: int = 3, seed: int = 0):
+def fit_offline_hmm_positions(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5):
     """
     S1 专用入口：拟合HMM + Viterbi(平滑)解码 + 按平滑状态标定暴露。
     返回: (w_target: 逐日目标仓位Series, state_stats)
     """
-    model, feat = fit_hmm(df, k=k, seed=seed)
+    model, feat = fit_hmm(df, k=k, seed=seed, n_restarts=n_restarts)
     state_seq = decode_smoothed(model, feat)
     state_stats = calibrate_state_exposures(state_seq, df["log_return"].values, k)
     w_target = pd.Series([state_stats[f"state_{s}"]["target_exposure"] for s in state_seq],

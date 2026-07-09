@@ -4,12 +4,14 @@ pipeline/01_data_loading.py
 对应方法论文档 §2「数据与特征构建」的数据来源说明。
 
 原先这一步是用 engine/synthetic_data.py 生成合成三区制数据；现在切换到
-真实中证800数据，这一步变成单纯的"读取+标准化+画一张价格路径图"。
+真实中证800全收益指数数据，这一步变成单纯的"读取+标准化+画一张价格
+路径图"。
 
-**占位格式说明**：真实数据文件尚未就位，本脚本按占位格式设计：
-  输入: data/csi800.csv，至少包含 ['date', 'close'] 两列
-  若拿到的真实文件列名不同（比如用的是'收盘价'或其它行情源字段名），
-  只需改下面 RAW_COLUMNS 这一处映射，不需要改下游任何脚本。
+**数据来源**：data/csi800_total_return.xlsx —— 中证800全收益指数（纳入
+分红再投资）日频收盘点位，对应文档 §2"标的：中证800指数（建议采用全
+收益口径）"。原始文件是 Sheet1 两列、无表头：[日期, 收盘点位]，
+2009-01-05 起（覆盖10年以上，满足文档"确保HSMM久期分布能跨越多轮完整
+牛熊周期"的要求）。
 
 运行方式：
   python pipeline/01_data_loading.py
@@ -31,26 +33,18 @@ sys.path.insert(0, str(REPO_ROOT))
 from engine.plotting import setup_cjk_font  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
-RAW_PATH = DATA_DIR / "csi800.csv"
-# 占位映射：原始文件的日期/收盘价列名 -> 标准化列名。真实数据到位后如果
-# 列名不同，只需改这一处。
-RAW_COLUMNS = {"date": "date", "close": "price"}
+RAW_PATH = DATA_DIR / "csi800_total_return.xlsx"
 
 
 def load_raw_prices(path: Path) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
-            f"未找到真实数据文件 {path}。请把中证800价格数据放到该路径，"
-            f"至少包含 {list(RAW_COLUMNS.keys())} 这些列（列名不同的话改"
-            f"本脚本顶部的 RAW_COLUMNS 映射即可）。"
+            f"未找到真实数据文件 {path}。请把中证800全收益指数数据（Sheet1，"
+            f"两列[日期, 收盘点位]，无表头）放到该路径。"
         )
-    df = pd.read_csv(path)
-    df = df.rename(columns={raw: std for raw, std in RAW_COLUMNS.items()})
-    missing = {"date", "price"} - set(df.columns)
-    if missing:
-        raise ValueError(f"{path} 标准化后仍缺少列: {missing}，请检查 RAW_COLUMNS 映射")
+    df = pd.read_excel(path, sheet_name=0, header=None, names=["date", "price"])
     df["date"] = pd.to_datetime(df["date"])
-    df = df[["date", "price"]].sort_values("date").drop_duplicates("date").reset_index(drop=True)
+    df = df.sort_values("date").drop_duplicates("date").reset_index(drop=True)
     return df
 
 
