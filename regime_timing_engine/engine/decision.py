@@ -13,10 +13,12 @@ engine/decision.py
    w_k* 的标定方式（对应文档"可由区制条件夏普或区制条件（分数）凯利标定"）：
    本实现采用"分数凯利，按最优区制归一化"——
        f_k = mu_k / sigma_k^2   （单区制最优凯利仓位，未分数化前）
-       w_k* = clip(f_k / max(f_k, eps), 0, 1)
-   即把凯利仓位最高的区制映射为满仓(1.0)，其余按比例缩放，凯利为负（预期
-   亏钱）的区制映射为0（空仓/防御）。这是一个可解释、单调、避免"满仓杠杆"
-   数值爆炸的简化标定方式，实盘可替换为更严谨的分数凯利或风险平价方案。
+       w_k* = clip(f_k / max(f_k, eps) * hi, lo, hi)
+   即把凯利仓位最高的区制映射到仓位上界hi，其余按比例缩放，clip到[lo,hi]
+   区间。默认(lo,hi)=(0,1)对应"不允许做空/杠杆"的长仓模式（此时数值上与
+   早期版本的clip(0,1)完全一致）；若允许做空/杠杆，调用方可传入更宽的区间
+   如(-1,2)。这是一个可解释、单调、避免数值爆炸的简化标定方式，实盘可替换
+   为更严谨的分数凯利或风险平价方案。
 
 2. 久期折减 φ：随"混合预期剩余久期"相对"混合平均久期"的比值单调递减。
    直觉：当前区制越老、预期剩余越短，越应该向中性/防御仓位收缩
@@ -31,16 +33,21 @@ from dataclasses import dataclass
 import numpy as np
 
 
-def calibrate_target_exposures(regime_stats: dict) -> dict:
+def calibrate_target_exposures(regime_stats: dict, bounds: tuple = (0.0, 1.0)) -> dict:
     """
     regime_stats: {regime_name: {"mu": 日均收益, "sigma": 日波动}}
-    返回 {regime_name: w_k*}，凯利仓位最高的区制映射为1.0，其余按比例缩放，
-    凯利为负的区制映射为0。
+    bounds: 目标暴露的(lo, hi)区间。默认(0,1)为长仓模式（不允许做空/杠杆），
+            此时数值上与早期硬编码clip(0,1)完全一致；(-1,2)之类的更宽区间
+            对应允许做空/杠杆的模式，两种都应支持并可对比（见
+            ablation/leverage_contrast.py）。
+    返回 {regime_name: w_k*}，凯利仓位最高的区制映射到hi，其余按比例缩放并
+    clip到[lo,hi]。
     """
+    lo, hi = bounds
     kelly = {k: v["mu"] / (v["sigma"] ** 2) for k, v in regime_stats.items()}
     max_kelly = max(kelly.values())
     eps = 1e-8
-    return {k: float(np.clip(f / (max_kelly + eps), 0.0, 1.0)) for k, f in kelly.items()}
+    return {k: float(np.clip(f / (max_kelly + eps) * hi, lo, hi)) for k, f in kelly.items()}
 
 
 def duration_discount(expected_remaining: float, reference_duration: float,

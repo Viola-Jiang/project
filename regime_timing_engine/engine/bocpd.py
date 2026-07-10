@@ -51,7 +51,7 @@ import numpy as np
 from scipy.special import logsumexp
 from typing import Callable, Optional
 
-from .emission import NIWConjugateEmission
+from .emission import NIGConjugateEmission
 
 
 class BOCPD:
@@ -80,7 +80,7 @@ class BOCPD:
                         最大 run-length 桶（截断近似，避免无限增长；标准BOCPD工程实践）。
         """
         self.hazard_fn = hazard_fn
-        self.emission = NIWConjugateEmission.from_nig(mu0, kappa0, alpha0, beta0, max_run_length)
+        self.emission = NIGConjugateEmission(mu0, kappa0, alpha0, beta0, max_run_length)
         self.max_run_length = max_run_length
 
         # log P(r_0 = 0) = 1，即时刻0必然是"新段的第0天"
