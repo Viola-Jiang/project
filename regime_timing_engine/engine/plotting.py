@@ -1,7 +1,7 @@
 """
 regime_engine/plotting.py
 ==========================
-公共绘图工具：统一处理中文字体加载与常用配色，避免每个 step 脚本重复样板代码。
+公共绘图工具：统一处理中文字体加载与常用配色。
 """
 
 import matplotlib
@@ -17,7 +17,7 @@ _FONT_CANDIDATES = [
 
 
 def setup_cjk_font():
-    """加载中文字体，避免图中中文显示为方框。返回是否加载成功。"""
+    """加载中文字体。返回是否加载成功。"""
     for path in _FONT_CANDIDATES:
         try:
             fm.fontManager.addfont(path)

@@ -1,17 +1,14 @@
 """
 pipeline/01_data_loading.py
 ==============================
-对应方法论文档 §2「数据与特征构建」的数据来源说明。
+§2「数据与特征构建」
 
-原先这一步是用 engine/synthetic_data.py 生成合成三区制数据；现在切换到
-真实中证800全收益指数数据，这一步变成单纯的"读取+标准化+画一张价格
-路径图"。
+这一步基于真实中证800全收益指数数据，实现：
+“读取真实数据 → 标准化成内部统一格式 → 画一张原始价格图存档。”
 
-**数据来源**：data/csi800_total_return.xlsx —— 中证800全收益指数（纳入
-分红再投资）日频收盘点位，对应文档 §2"标的：中证800指数（建议采用全
-收益口径）"。原始文件是 Sheet1 两列、无表头：[日期, 收盘点位]，
-2009-01-05 起（覆盖10年以上，满足文档"确保HSMM久期分布能跨越多轮完整
-牛熊周期"的要求）。
+数据来源：data/csi800_total_return.xlsx —— 中证800全收益指数（纳入
+分红再投资）日频收盘点位。原始文件是 Sheet1 两列、无表头：[日期, 收盘点位]，
+2009-01-05 起。
 
 运行方式：
   python pipeline/01_data_loading.py
@@ -54,7 +51,7 @@ def make_diagnostic_plot(df: pd.DataFrame, save_path: Path):
     ax.plot(df["date"], df["price"], color="black", lw=1)
     ax.set_ylabel("指数点位")
     ax.set_xlabel("日期")
-    ax.set_title("中证800价格路径（原始数据，尚未做特征工程/区制标注）")
+    ax.set_title("中证800价格路径")
     plt.tight_layout()
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path, dpi=130)

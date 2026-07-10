@@ -1,7 +1,7 @@
 """
 pipeline/02_feature_engineering.py
 ===================================
-对应方法论文档 §2「数据与特征构建」。
+§2「数据与特征构建」。
 
 特征（对应实现 preprocess()）：
   1. 对数收益      r_t = ln(P_t / P_{t-1})
@@ -33,7 +33,7 @@ DATA_DIR = REPO_ROOT / "data"
 FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
-from engine.features import compute_features  # noqa: E402
+from engine.features import preprocess  # noqa: E402
 from engine.regime_labeling import auto_label_regimes  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
@@ -87,7 +87,7 @@ def make_diagnostic_plot(df: pd.DataFrame, save_path: Path):
 
 if __name__ == "__main__":
     raw = pd.read_csv(DATA_DIR / "prices.csv", parse_dates=["date"])
-    features = compute_features(raw)
+    features = preprocess(raw)
 
     # auto_label_regimes 内部要拟合HMM，不能吃NaN，所以只对warm-up期之后的
     # 有效样本做自动标注，再按原始index对齐拼回去——warm-up期的
