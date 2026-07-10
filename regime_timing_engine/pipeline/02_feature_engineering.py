@@ -11,7 +11,7 @@ pipeline/02_feature_engineering.py
 真实数据没有上帝视角的区制标签，本脚本额外调用
 engine/regime_labeling.auto_label_regimes 产出 ref_regime/ref_regime_age
 两列——这是离线全样本HMM给出的**参照标签，不是真值**，只供 pipeline
-03-06 与 ablation 的诊断/评估使用（详见该模块 docstring 的边界说明）。
+03-06 与 ablation 的诊断/评估使用。
 
 运行方式：
   python pipeline/02_feature_engineering.py   (需先运行 01_data_loading.py)

@@ -5,10 +5,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0448c732-49b7-4dad-ba76-872b68c984e0" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/features.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/features.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/plotting.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/plotting.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/regime_labeling.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/regime_labeling.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/pipeline/01_data_loading.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/pipeline/01_data_loading.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/regime_timing_engine/pipeline/02_feature_engineering.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/pipeline/02_feature_engineering.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
