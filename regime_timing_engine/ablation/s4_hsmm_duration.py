@@ -24,10 +24,11 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from ablation.common import (  # noqa: E402
     load_data, RESULTS_DIR, FIGURES_DIR, MIN_HISTORY, REESTIMATE_EVERY, PRIOR_LOOKBACK, K_REGIMES,
+    BLEND_NEW_WEIGHT, blend_prior,
 )
 from engine.bocpd import BOCPD  # noqa: E402
 from engine.emission import fit_nig_prior_from_moments  # noqa: E402
-from engine.calibration import estimate_regime_params_causal  # noqa: E402
+from engine.calibration import estimate_regime_params_causal, blend_assigners  # noqa: E402
 from engine.decision import duration_discount, apply_uncertainty_shrinkage, RebalanceEngine  # noqa: E402
 from engine.evaluation import compute_backtest_metrics, print_metrics, detection_lag_stats  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
@@ -36,26 +37,35 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
                         lam_uncertainty: float = 0.5, duration_floor: float = 0.3,
-                        rebalance_delta: float = 0.08, cp_threshold: float = 0.5) -> pd.DataFrame:
+                        rebalance_delta: float = 0.08, cp_threshold: float = 0.5,
+                        position_bounds: tuple = (0.0, 1.0)) -> pd.DataFrame:
     """
     与 S3 唯一的差异：duration_family="negbinom"（年龄相依hazard），
-    并在混合暴露之后多乘一个 duration_discount(phi)。
+    并在混合暴露之后多乘一个 duration_discount(phi)。季度重估的7:3平滑
+    与hazard-refine同S2/S3。
     """
+    lo, hi = position_bounds
+    neutral = (lo + hi) / 2.0
     bocpd = BOCPD(hazard_fn=lambda r: 0.01, mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
     rebalancer = RebalanceEngine(delta=rebalance_delta, changepoint_threshold=cp_threshold)
     assigner = None
+    prior = None
     records = []
 
     for i, row in df.iterrows():
         if i >= MIN_HISTORY and (i - MIN_HISTORY) % REESTIMATE_EVERY == 0:
             hist = df.iloc[:i]
             try:
-                mu0, kappa0, alpha0, beta0 = fit_nig_prior_from_moments(hist["z"].values[-PRIOR_LOOKBACK:])
-                bocpd.emission.update_prior(mu0, kappa0, alpha0, beta0)
+                new_prior = fit_nig_prior_from_moments(hist["z"].values[-PRIOR_LOOKBACK:])
+                prior = blend_prior(new_prior, prior, new_weight=BLEND_NEW_WEIGHT)
+                bocpd.emission.update_prior(*prior)
             except ValueError:
                 pass
             try:
-                assigner, _ = estimate_regime_params_causal(hist, k=k_regimes, duration_family="negbinom")
+                new_assigner, _ = estimate_regime_params_causal(
+                    hist, k=k_regimes, duration_family="negbinom", position_bounds=position_bounds)
+                assigner = blend_assigners(new_assigner, assigner, duration_family="negbinom",
+                                           new_weight=BLEND_NEW_WEIGHT)
             except ValueError:
                 pass
 
@@ -70,14 +80,20 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         z_t = row["z"]
         regime_names = assigner.names
 
+        # 构造今天hazard只能用step前的信息（这是循环依赖里避不开的一环）
         posterior_prev = np.exp(bocpd.log_run_length_posterior)
         mu_hat_prev, sigma_hat_prev = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
-        regime_probs = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))
-        map_regime = regime_names[int(np.argmax(regime_probs))]
+        regime_probs_prev = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))
 
         run_lengths = np.arange(bocpd.n_hypotheses)
-        h_mix = assigner.mixture_hazard(regime_probs, run_lengths)
+        h_mix = assigner.mixture_hazard(regime_probs_prev, run_lengths)
         result = bocpd.step(z_t, hazards_override=h_mix)
+
+        # step()跑完后用最新后验重新算一次区制概率，用于今天的仓位决策/记录
+        posterior_now = np.exp(bocpd.log_run_length_posterior)
+        mu_hat_now, sigma_hat_now = bocpd.emission.posterior_weighted_mean_scale(posterior_now)
+        regime_probs = assigner.assign(np.array([mu_hat_now, sigma_hat_now]))
+        map_regime = regime_names[int(np.argmax(regime_probs))]
 
         proto_by_name = {p.name: p for p in assigner.prototypes}
         mixture_exposure = sum(regime_probs[i2] * proto_by_name[name].target_exposure
@@ -92,8 +108,9 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         phi = duration_discount(mixture_remaining, mixture_mean_duration, floor=duration_floor)
 
         w_before_shrink = mixture_exposure * phi
-        w_raw = apply_uncertainty_shrinkage(w_before_shrink, result.posterior_entropy, lam=lam_uncertainty)
-        w_raw = float(np.clip(w_raw, 0.0, 1.0))
+        w_raw = apply_uncertainty_shrinkage(w_before_shrink, result.posterior_entropy,
+                                             lam=lam_uncertainty, neutral=neutral)
+        w_raw = float(np.clip(w_raw, lo, hi))
         w_held = rebalancer.step(w_raw, result.prob_recent_reset, map_regime)
 
         records.append({"date": row["date"], "ref_regime": row["ref_regime"],

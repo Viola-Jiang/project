@@ -54,18 +54,21 @@ def load_data():
 def fit_reference_prototypes(df: pd.DataFrame, seg_stats: pd.DataFrame, regimes: list):
     """
     用自动标注参照标签（ref_regime）直接计算每个区制在特征空间[z, log_sigma]
-    中的中心。这是一个离线全样本上限参照，不是oracle真值上限——真值在真实
-    数据上根本不存在。
+    中的中心（与协方差，供 RegimeSoftAssigner 的马氏/Wasserstein距离用）。
+    这是一个离线全样本上限参照，不是oracle真值上限——真值在真实数据上
+    根本不存在。
     """
     prototypes = []
     for regime in regimes:
         sub = df[df["ref_regime"] == regime]
-        mean_z = sub["z"].mean()
-        mean_log_sigma = np.log(sub["realized_vol"]).mean()
+        feat = np.column_stack([sub["z"].values, np.log(sub["realized_vol"].values)])
+        mean_feature = feat.mean(axis=0)
+        cov = np.cov(feat, rowvar=False) if len(feat) > 1 else np.eye(2) * 1e-6
         nb_model, _, _ = fit_regime_duration_models(seg_stats, regime)
         prototypes.append(RegimePrototype(
-            name=regime, mean_feature=np.array([mean_z, mean_log_sigma]), duration_model=nb_model))
-        print(f"  [参照原型] {regime}: mean_z={mean_z:.4f}, mean_log_sigma={mean_log_sigma:.4f}")
+            name=regime, mean_feature=mean_feature, duration_model=nb_model,
+            cov=cov, n_obs=len(sub)))
+        print(f"  [参照原型] {regime}: mean_z={mean_feature[0]:.4f}, mean_log_sigma={mean_feature[1]:.4f}")
     return prototypes
 
 
@@ -108,15 +111,20 @@ def run_online_with_regime_mixture(df: pd.DataFrame, assigner: RegimeSoftAssigne
         z_t = row["z"]
         log_sigma_t = np.log(row["realized_vol"])
 
+        # 构造今天hazard只能用step前的信息（循环依赖里避不开的一环）
         posterior_prev = np.exp(bocpd.log_run_length_posterior)
         mu_hat_prev = float(np.sum(posterior_prev * bocpd.emission.mu))
-
-        regime_probs = assigner.assign(np.array([mu_hat_prev, log_sigma_t]))
-        map_regime = regime_names[int(np.argmax(regime_probs))]
+        regime_probs_prev = assigner.assign(np.array([mu_hat_prev, log_sigma_t]))
 
         run_lengths = np.arange(bocpd.n_hypotheses)
-        h_mix = assigner.mixture_hazard(regime_probs, run_lengths)
+        h_mix = assigner.mixture_hazard(regime_probs_prev, run_lengths)
         result = bocpd.step(z_t, hazards_override=h_mix)
+
+        # step()跑完后用最新后验重新算一次区制概率，用于本步的记录/诊断
+        posterior_now = np.exp(bocpd.log_run_length_posterior)
+        mu_hat_now = float(np.sum(posterior_now * bocpd.emission.mu))
+        regime_probs = assigner.assign(np.array([mu_hat_now, log_sigma_t]))
+        map_regime = regime_names[int(np.argmax(regime_probs))]
 
         records.append({
             "date": row["date"], "ref_regime": row["ref_regime"], "ref_regime_age": row["ref_regime_age"],
