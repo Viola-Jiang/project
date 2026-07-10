@@ -1,7 +1,9 @@
 """
-pipeline/02_feature_engineering.py
+ablation/02_feature_engineering.py
 ===================================
 §2「数据与特征构建」。
+
+真实执行链路（ablation/）的第二步，紧接 01_data_loading.py。
 
 特征（对应实现 preprocess()）：
   1. 对数收益      r_t = ln(P_t / P_{t-1})
@@ -10,17 +12,17 @@ pipeline/02_feature_engineering.py
 
 真实数据没有上帝视角的区制标签，本脚本额外调用
 engine/regime_labeling.auto_label_regimes 产出 ref_regime/ref_regime_age
-两列——这是离线全样本HMM给出的**参照标签，不是真值**，只供 pipeline
-03-06 与 ablation 的诊断/评估使用。
+两列——这是离线全样本HMM给出的**参照标签，不是真值**，只供 validation/
+与 ablation/ 的诊断/评估使用（详见该模块 docstring 的边界说明）。
 
 运行方式：
-  python pipeline/02_feature_engineering.py   (需先运行 01_data_loading.py)
+  python ablation/02_feature_engineering.py   (需先运行 01_data_loading.py)
 输出：
   data/features.csv
-  outputs/figures/02_feature_engineering.png
+  outputs/ablation/figures/02_feature_engineering.png
 
-注：核心特征计算逻辑已抽到 engine/features.py，因为需要被多个 pipeline/
-ablation 脚本复用，本脚本只负责：对主线数据调用一次、存csv、画诊断图。
+注：核心特征计算逻辑已抽到 engine/features.py，因为需要被 validation/ 与
+ablation/ 的多个脚本复用，本脚本只负责：对主线数据调用一次、存csv、画诊断图。
 """
 
 import sys
@@ -30,7 +32,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
+FIGURES_DIR = REPO_ROOT / "outputs" / "ablation" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.features import preprocess  # noqa: E402

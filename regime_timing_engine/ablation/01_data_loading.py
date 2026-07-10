@@ -1,5 +1,5 @@
 """
-pipeline/01_data_loading.py
+ablation/01_data_loading.py
 ==============================
 §2「数据与特征构建」
 
@@ -11,10 +11,10 @@ pipeline/01_data_loading.py
 2009-01-05 起。
 
 运行方式：
-  python pipeline/01_data_loading.py
+  python ablation/01_data_loading.py
 输出：
   data/prices.csv （标准化列：date, price）
-  outputs/figures/01_data_loading.png
+  outputs/ablation/figures/01_data_loading.png
 """
 
 import sys
@@ -24,7 +24,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
+FIGURES_DIR = REPO_ROOT / "outputs" / "ablation" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.plotting import setup_cjk_font  # noqa: E402

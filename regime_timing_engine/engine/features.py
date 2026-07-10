@@ -6,8 +6,7 @@ engine/features.py
   2. 已实现波动    sigma_t = std(r_{t-w+1:t}), w = 20
   3. 波动归一化收益 z_t = r_t / sigma_t   <- BOCPD 的实际"发射观测"
 
-被 pipeline/02_feature_engineering.py 调用。
-
+被 ablation/02_feature_engineering.py 调用。
 """
 
 import numpy as np

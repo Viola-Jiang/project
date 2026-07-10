@@ -2,7 +2,7 @@
 ablation/backtest_report.py
 ==============================
 对应方法论文档 §6「回测框架与统计检验」的完整交付：把 §6.1~§6.4 四项要求
-串成一份报告（§6.5 方法论流程验证已经由 pipeline/ + ablation/ 整体覆盖，
+串成一份报告（§6.5 方法论流程验证已经由 validation/ + ablation/ 整体覆盖，
 不在本脚本重复）。
 
 §6.1 防泄漏（walk-forward; Purged K-Fold + Embargo）
@@ -24,8 +24,9 @@ ablation/backtest_report.py
 
 运行方式：
   python ablation/backtest_report.py
-  (需先运行 pipeline/01, pipeline/02；若 outputs/ablation/results/ 下还没有
-   s5_multi_seed_robustness.csv / lookahead_contrast.csv，本脚本会自动现跑一遍)
+  (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py；若
+   outputs/ablation/results/ 下还没有 s5_multi_seed_robustness.csv /
+   lookahead_contrast.csv，本脚本会自动现跑一遍)
 """
 
 import sys
