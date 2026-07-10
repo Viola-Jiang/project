@@ -6,7 +6,7 @@ ablation/run_ablation_summary.py
 就是整个消融实验最终要交付的东西。
 
 运行方式：
-  python ablation/run_ablation_summary.py   (需先运行 pipeline/01, pipeline/02)
+  python ablation/run_ablation_summary.py   (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py)
 输出：
   outputs/ablation/results/ablation_summary.csv
   控制台打印六级对比表 + 净增量 + S1→S2前视偏差量化 + S5统计去伪结论

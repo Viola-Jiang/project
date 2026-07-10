@@ -1,7 +1,11 @@
 """
-pipeline/03_emission_validation.py
+validation/emission_validation.py
 ====================================
 对应方法论文档 §3.3「共轭发射与 Student-t 预测分布」。
+
+这是组件级正确性/行为验证脚本，不是实际执行链路的一部分——只验证
+engine/emission.py 里的数学/公式对不对，跟策略怎么配置无关。真正的
+数据处理与策略回测链路在 ablation/（01_data_loading.py 开始）。
 
 真实数据没有上帝视角的区制标签，B/C 两类验证改用 engine/regime_labeling
 产出的 ref_regime/ref_regime_age——离线全样本HMM给出的**参照标签，不是
@@ -15,11 +19,11 @@ pipeline/03_emission_validation.py
      分布——单个样例的结论未必有代表性，必须看全局。
 
 运行方式：
-  python pipeline/03_emission_validation.py   (需先运行 01, 02)
+  python validation/emission_validation.py   (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py)
 输出：
-  outputs/results/03_emission_convergence_trace.csv
-  outputs/results/03_emission_transitions_drop.csv
-  outputs/figures/03_emission_validation.png
+  outputs/validation/results/emission_convergence_trace.csv
+  outputs/validation/results/emission_transitions_drop.csv
+  outputs/validation/figures/emission_validation.png
 """
 
 import sys
@@ -30,8 +34,8 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-RESULTS_DIR = REPO_ROOT / "outputs" / "results"
-FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
+RESULTS_DIR = REPO_ROOT / "outputs" / "validation" / "results"
+FIGURES_DIR = REPO_ROOT / "outputs" / "validation" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.emission import NIGConjugateEmission, batch_nig_posterior  # noqa: E402
@@ -224,8 +228,8 @@ if __name__ == "__main__":
     transitions_df = test_all_transitions_likelihood_drop()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    trace_df.to_csv(RESULTS_DIR / "03_emission_convergence_trace.csv", index=False)
-    transitions_df.to_csv(RESULTS_DIR / "03_emission_transitions_drop.csv", index=False)
+    trace_df.to_csv(RESULTS_DIR / "emission_convergence_trace.csv", index=False)
+    transitions_df.to_csv(RESULTS_DIR / "emission_transitions_drop.csv", index=False)
     print(f"\n结果已保存 -> {RESULTS_DIR}")
 
-    make_diagnostic_plot(trace_df, transitions_df, FIGURES_DIR / "03_emission_validation.png")
+    make_diagnostic_plot(trace_df, transitions_df, FIGURES_DIR / "emission_validation.png")

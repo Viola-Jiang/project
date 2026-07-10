@@ -16,7 +16,7 @@ ablation/lookahead_contrast.py
              对照实验，控制变量比 S1 vs S2 更严格。
 
 运行方式：
-  python ablation/lookahead_contrast.py   (需先运行 pipeline/01, pipeline/02)
+  python ablation/lookahead_contrast.py   (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py)
 输出：
   outputs/ablation/results/lookahead_contrast.csv
   outputs/ablation/figures/lookahead_contrast.png

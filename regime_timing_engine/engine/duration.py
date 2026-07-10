@@ -28,9 +28,9 @@ engine/duration.py
   fit_regime_duration_models            —— 对指定区制分别拟合 NegBinom（HSMM用）
                                             与 Geometric（HMM隐含假设，仅作对照）
                                             两套久期模型
-  这两个函数被 pipeline 中多个阶段复用（久期/hazard验证、区制软分配、仓位映射
-  与回测），因此放在 engine 包内而非某个具体的 pipeline 脚本里，避免脚本之间
-  互相 import。
+  这两个函数被 validation/ 与 ablation/ 中多个脚本复用（久期/hazard验证、
+  区制软分配、仓位映射与回测），因此放在 engine 包内而非某个具体脚本里，
+  避免脚本之间互相 import。
 """
 
 from dataclasses import dataclass
@@ -159,7 +159,8 @@ def extract_segment_durations_from_labels(labels) -> pd.DataFrame:
     """
     通用版本：给定任意一串类别标签，按值发生变化的位置切分连续段，返回每段
     的标签与久期。喂入的标签可以是 engine.regime_labeling 产出的自动标注
-    参照标签（离线诊断，见 pipeline/04、06），也可以是「§5.1 因果 walk-forward
+    参照标签（离线诊断，见 validation/duration_hazard_validation.py、
+    regime_assignment_validation.py），也可以是「§5.1 因果 walk-forward
     估参」里模型自己对历史的聚类结果（见 engine/calibration.py）——两处场景
     共用这一份底层实现，避免逻辑不一致。
 

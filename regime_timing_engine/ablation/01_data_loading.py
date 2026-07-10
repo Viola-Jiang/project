@@ -1,11 +1,12 @@
 """
-pipeline/01_data_loading.py
+ablation/01_data_loading.py
 ==============================
 对应方法论文档 §2「数据与特征构建」的数据来源说明。
 
-原先这一步是用 engine/synthetic_data.py 生成合成三区制数据；现在切换到
-真实中证800全收益指数数据，这一步变成单纯的"读取+标准化+画一张价格
-路径图"。
+这是真实执行链路（ablation/）的第一步：读取真实中证800全收益指数数据，
+"读取+标准化+画一张价格路径图"，供 02_feature_engineering.py 及后续
+S0~S5 消融实验使用。与 validation/ 目录（纯组件正确性验证，不是实际
+执行链路的一部分）是两回事，见 ablation/__init__.py 的说明。
 
 **数据来源**：data/csi800_total_return.xlsx —— 中证800全收益指数（纳入
 分红再投资）日频收盘点位，对应文档 §2"标的：中证800指数（建议采用全
@@ -14,10 +15,10 @@ pipeline/01_data_loading.py
 牛熊周期"的要求）。
 
 运行方式：
-  python pipeline/01_data_loading.py
+  python ablation/01_data_loading.py
 输出：
   data/prices.csv （标准化列：date, price）
-  outputs/figures/01_data_loading.png
+  outputs/ablation/figures/01_data_loading.png
 """
 
 import sys
@@ -27,7 +28,7 @@ import pandas as pd
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
-FIGURES_DIR = REPO_ROOT / "outputs" / "figures"
+FIGURES_DIR = REPO_ROOT / "outputs" / "ablation" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.plotting import setup_cjk_font  # noqa: E402

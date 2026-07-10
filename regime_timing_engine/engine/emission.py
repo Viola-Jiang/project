@@ -114,7 +114,7 @@ def batch_nig_posterior(x: np.ndarray, mu0: float, kappa0: float,
                          alpha0: float, beta0: float) -> tuple[float, float, float, float]:
     """
     一元NIG的批量闭式后验（离线一次性计算），用于与在线增量递归做正确性
-    校验（pipeline/03_emission_validation.py）。这是独立于 NIGConjugateEmission
+    校验（validation/emission_validation.py）。这是独立于 NIGConjugateEmission
     之外、按文档§3.3批量公式重新推导的一份实现——保留两份独立推导互相校验，
     是刻意的正确性检验设计，不是重复造轮子。
     """
