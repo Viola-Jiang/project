@@ -50,6 +50,7 @@ class NIGConjugateEmission:
 
     def predictive_logpdf(self, x: float) -> np.ndarray:
         """
+        后验预测分布为 Student-t。后验预测分布为【这个具体的数 x_t 像不像这段历史该出现的样子】
         返回: 长度 n_hypotheses 的对数似然数组，对应文档公式
               pi_t^(r) = p(x_t | r_{t-1}=r, x_{(t-r):(t-1)})
         """

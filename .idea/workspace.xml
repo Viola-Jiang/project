@@ -6,8 +6,10 @@
   <component name="ChangeListManager">
     <list default="true" id="0448c732-49b7-4dad-ba76-872b68c984e0" name="更改" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/bocpd.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/bocpd.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/多行业宽基指数.xlsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/emission.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/emission.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s0_baseline.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s0_baseline.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_constant.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_constant.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_ma.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_ma.csv" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -32,11 +34,41 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "Python.s0_baseline.executor": "Run",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
 }]]></component>
+  <component name="RunManager">
+    <configuration name="s0_baseline" type="PythonConfigurationType" factoryName="Python" temporary="true" nameIsGenerated="true">
+      <module name="project" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/regime_timing_engine/ablation" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/regime_timing_engine/ablation/s0_baseline.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Python.s0_baseline" />
+      </list>
+    </recent_temporary>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
