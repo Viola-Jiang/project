@@ -14,7 +14,7 @@ engine/bocpd.py
   归一化：
     P(r_t | x_1:t) = P(r_t, x_1:t) / sum_{r_t} P(r_t, x_1:t)
 
-本实现的关键改动（对应文档"HSMM久期升级"）：
+本实现的关键改动（HSMM久期升级）：
   原始 Adams & MacKay (2007) 使用常数 hazard（等价假设几何久期）。
   本引擎的 hazard 由 Step 3 拟合的 NegBinom 久期分布通过
   H(r) = g(r)/P(D>=r) 导出，随 run-length 变化 —— 这就是 S4 阶段
@@ -35,7 +35,7 @@ engine/bocpd.py
       归一化后 P(r_t=0|x_1:t) = h*M / [(1-h)*M + h*M] = h，
       数据相关的 M 在分子分母中被约去。
   这意味着：用 P(r_t=0) 单独作为"变点置信度"在常数hazard下是完全无意义的
-  统计量（它根本不随数据变化）！哪怕换成年龄相依 hazard，这个退化也只是被
+  统计量（它根本不随数据变化）。哪怕换成年龄相依 hazard，这个退化也只是被
   削弱而非消除（P(r_t=0)的"基线"仍会锚定在 H(1) 附近，波动幅度有限）。
   工程实践中应使用：
     (a) MAP run length 是否骤降至小值（本文件 map_run_length 字段），或
