@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0448c732-49b7-4dad-ba76-872b68c984e0" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/emission.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/emission.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s0_baseline.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s0_baseline.png" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_constant.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_constant.csv" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_ma.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_ma.csv" afterDir="false" />
-    </list>
+    <list default="true" id="0448c732-49b7-4dad-ba76-872b68c984e0" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />

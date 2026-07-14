@@ -49,28 +49,30 @@ class DiscreteDurationModel:
     d_min: int = 1
     name: str = "duration"
 
-    def __post_init__(self):
+    def __post_init__(self): 
+        """把 pmf 转成可查询形态"""
         total_mass = self.pmf.sum()
         if total_mass < 0.999:
+            # 检查截断质量
             raise ValueError(
                 f"[{self.name}] pmf 截断范围内总质量仅 {total_mass:.4f} < 0.999，"
                 f"请扩大 max_duration 截断范围"
             )
         # 归一化，消除截断带来的微小质量损失
         self.pmf = self.pmf / total_mass
-        # survival_gt[k] = P(D > d_min + k - 1) ... 我们直接建索引到 d 本身，见下方方法
         self._d_values = np.arange(self.d_min, self.d_min + len(self.pmf))
         # tail_from[i] = P(D >= d_values[i]) = sum_{j>=i} pmf[j]
         self._tail_from = np.cumsum(self.pmf[::-1])[::-1]
 
     def pmf_at(self, d: int) -> float:
+        """P(D = d)"""
         idx = d - self.d_min
         if idx < 0 or idx >= len(self.pmf):
             return 0.0
         return float(self.pmf[idx])
 
     def survival_ge(self, d: int) -> float:
-        """P(D >= d)，即"段至少存续到年龄 d"的概率。"""
+        """P(D >= d)"""
         idx = d - self.d_min
         if idx < 0:
             return 1.0
@@ -82,6 +84,8 @@ class DiscreteDurationModel:
         """
         H(r) = g(r) / P(D >= r)：段已存续至 r-1、恰在年龄 r 结束的条件概率。
         对应文档公式 H(r) = g(r)/S(r-1)，S(r-1) 定义为 sum_{d>=r} g(d) = P(D>=r)。
+        三个不同的对象（bull/sideways/bear），各有一个 hazard 方法
+        该函数在regime.py中调用，
         """
         denom = self.survival_ge(r)
         if denom <= 1e-300:
@@ -120,7 +124,7 @@ class DiscreteDurationModel:
 def fit_negbinom_duration(mean: float, var: float, d_min: int = 1,
                            max_duration: int = 3000, name: str = "negbinom") -> DiscreteDurationModel:
     """
-    以矩估计法（method of moments）由 (均值, 方差) 反推负二项参数，构造久期分布。
+    以矩估计法（method of moments）由 (均值, 方差) 反推负二项参数（n, p），构造久期分布。
     约定：D - d_min ~ NegBinom(n, p)，即最小久期为 d_min。
     要求 var > (mean - d_min)，即相对于最小久期的过离散条件。
     """

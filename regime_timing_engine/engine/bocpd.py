@@ -1,7 +1,7 @@
 """
 engine/bocpd.py
 ================
-对应方法论文档 §3.2「贝叶斯在线变点检测（BOCPD）」+ §3.5 的 hazard 衔接。
+§3.2「贝叶斯在线变点检测（BOCPD）」+ §3.5 的 hazard 衔接。
 
 核心递归（联合概率形式，而非仅后验，避免归一化项过早损失数值精度）：
 
@@ -17,27 +17,20 @@ engine/bocpd.py
 本实现的关键改动（HSMM久期升级）：
   原始 Adams & MacKay (2007) 使用常数 hazard（等价假设几何久期）。
   本引擎的 hazard 由 Step 3 拟合的 NegBinom 久期分布通过
-  H(r) = g(r)/P(D>=r) 导出，随 run-length 变化 —— 这就是 S4 阶段
-  "HSMM久期升级"在 BOCPD 递归里的具体落地方式。
+  H(r) = g(r)/P(D>=r) 导出，随 run-length 变化。
 
 工程处理：
   - 全程在 log 空间运算（log-sum-exp），避免长序列下的数值下溢。
   - run-length 支持截断（max_run_length），防止数组随 t 无限增长。
-  - 每个区制可以有各自的 hazard 函数（若做多区制联合，可扩展为按区制
-    加权平均hazard；本Step先实现"单一物理过程、hazard由段龄决定"的
-    基础版本，区制身份识别留给 Step 5 的软分配）。
+  - 每个区制有各自的 hazard 函数。
 
-重要数学性质（务必了解，否则容易误用 changepoint_prob 做检测判据）：
+数学性质：
   当 hazard 为**常数** h（与 run-length 无关）时，可以证明
-      P(r_t=0 | x_1:t) 恒等于 h 本身，与观测数据完全无关！
-  证明：记 M = sum_r P(r_{t-1}=r)*pi_t^(r)（边际似然），则
-      grow 项之和 = (1-h)*M，reset 项 = h*M，
-      归一化后 P(r_t=0|x_1:t) = h*M / [(1-h)*M + h*M] = h，
-      数据相关的 M 在分子分母中被约去。
+      P(r_t=0 | x_1:t) 恒等于 h 本身，与观测数据完全无关。
   这意味着：用 P(r_t=0) 单独作为"变点置信度"在常数hazard下是完全无意义的
   统计量（它根本不随数据变化）。哪怕换成年龄相依 hazard，这个退化也只是被
   削弱而非消除（P(r_t=0)的"基线"仍会锚定在 H(1) 附近，波动幅度有限）。
-  工程实践中应使用：
+  工程实践中额外使用：
     (a) MAP run length 是否骤降至小值（本文件 map_run_length 字段），或
     (b) 期望段龄 E[r_t]（expected_run_length 字段）是否骤降，或
     (c) 累积概率 P(r_t <= k)，k 取一个较小的正整数如 2~3
@@ -100,8 +93,8 @@ class BOCPD:
         """
         处理一个新观测 x_t，执行一次完整的 BOCPD 递归更新。
 
-        hazards_override: 若提供，长度必须等于当前假设数 n_hypotheses，用于替代
-            内部固定的 hazard_fn —— 这是 Step 5 "区制混合hazard"的接口：
+        hazards_override: 若提供，长度必须等于当前假设数 n_hypotheses，
+            用于替代内部固定的 hazard_fn：
             外部先算出 P(z=k|x_1:t-1) 的区制后验，再用
                 h_mix(r) = sum_k P(z=k) * H_k(r+1)
             动态构造一个"融合了区制身份信息"的 hazard 数组，每一步都可以不同，

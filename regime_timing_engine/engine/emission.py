@@ -1,15 +1,10 @@
 """
 engine/emission.py
 ==================
-对应方法论文档 §3.3「共轭发射与 Student-t 预测分布」。
+§3.3「共轭发射与 Student-t 预测分布」。
 
 一元 NIG（Normal-Inverse-Gamma）共轭发射模型：先验 (mu0, kappa0, alpha0, beta0)，
-观测服从条件高斯，后验预测分布为 Student-t（推导见文档§3.3及本模块函数注释）。
-
-之前这里维护过一个通用 D 维 NIW（Normal-Inverse-Wishart）实现，是为文档
-§2/§8 提到的"联合建模 [z_t, sigma_t]"这个可选扩展预留的，但目前全仓库
-只用到 D=1，也没有计划近期做多维联合建模——不为不存在的需求预留抽象，
-现在删掉多维部分，只留一元实现。以后真要做多维联合建模，届时再按需扩展。
+观测服从条件高斯，后验预测分布为 Student-t。
 """
 
 from __future__ import annotations
@@ -50,7 +45,7 @@ class NIGConjugateEmission:
 
     def predictive_logpdf(self, x: float) -> np.ndarray:
         """
-        后验预测分布为 Student-t。后验预测分布为【这个具体的数 x_t 像不像这段历史该出现的样子】
+        后验预测分布为 Student-t。后验预测分布表示：这个具体的数 x_t 是否符合这段历史该出现的样子。
         返回: 长度 n_hypotheses 的对数似然数组，对应文档公式
               pi_t^(r) = p(x_t | r_{t-1}=r, x_{(t-r):(t-1)})
         """
@@ -89,12 +84,12 @@ class NIGConjugateEmission:
 
     def posterior_weighted_mean_scale(self, posterior: np.ndarray) -> tuple[float, float]:
         """
-        对应文档§3.6「run-length 后验加权的发射描述子 [μ̂t, σ̂t]」：
+        对应 §3.6「run-length 后验加权的发射描述子 [μ̂t, σ̂t]」：
         给定当前 run-length 后验权重（长度需等于 n_hypotheses），返回后验
         加权的 [mu_hat, sigma_hat]。
 
         sigma_hat 取该维度后验预测尺度参数（Student-t 的 scale，不是标准差）
-        的后验加权平均——与 mu_hat 用的是同一套后验权重，两者是"同一个模型
+        的后验加权平均：与 mu_hat 用的是同一套后验权重，两者是"同一个模型
         的两个输出"，不掺杂任何外部特征。
         """
         mu_hat = float(np.sum(posterior * self.mu))
@@ -104,7 +99,7 @@ class NIGConjugateEmission:
 
     def update_prior(self, mu0: float, kappa0: float, alpha0: float, beta0: float) -> None:
         """
-        动态更新 r=0 假设所使用的先验超参（对应文档 §5.4「参数季度滚动重估」）。
+        动态更新 r=0 假设所使用的先验超参（对应 §5.4「参数季度滚动重估」）。
         只影响之后每一步新增的 r=0 假设，不改动已经存活的 run-length>0 假设
         的充分统计量，因此不会引入前视。
         """
@@ -114,10 +109,9 @@ class NIGConjugateEmission:
 def batch_nig_posterior(x: np.ndarray, mu0: float, kappa0: float,
                          alpha0: float, beta0: float) -> tuple[float, float, float, float]:
     """
-    一元NIG的批量闭式后验（离线一次性计算），用于与在线增量递归做正确性
-    校验（validation/emission_validation.py）。这是独立于 NIGConjugateEmission
-    之外、按文档§3.3批量公式重新推导的一份实现——保留两份独立推导互相校验，
-    是刻意的正确性检验设计，不是重复造轮子。
+    一元NIG的批量闭式后验（离线一次性计算），用于与在线增量递归做正确性校验
+    （validation/emission_validation.py）。这是独立于 NIGConjugateEmission
+    之外、按 §3.3 批量公式重新推导的一份实现。
     """
     n = len(x)
     if n == 0:
@@ -136,7 +130,7 @@ def fit_nig_prior_from_moments(z_hist: np.ndarray, kappa0: float = 1.0,
                                 alpha0: float = 3.0) -> tuple[float, float, float, float]:
     """
     以历史 z 的样本矩（均值、方差）矩匹配标定一元NIG先验超参
-    （对应文档 §5.1 离线估参「发射先验：以历史 z 矩匹配标定 NIG/NIW 超参」）。
+    （对应 §5.1 离线估参「发射先验：以历史 z 矩匹配标定 NIG/NIW 超参」）。
 
     做法：
       mu0 直接取样本均值。
