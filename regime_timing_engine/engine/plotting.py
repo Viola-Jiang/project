@@ -12,7 +12,15 @@ import matplotlib.font_manager as fm
 REGIME_COLORS = {"bull": "#d94f4f", "sideways": "#e8b84b", "bear": "#3f6fa8"}
 
 _FONT_CANDIDATES = [
+    # macOS
+    "/System/Library/Fonts/STHeiti Medium.ttc",
+    "/System/Library/Fonts/STHeiti Light.ttc",
+    "/System/Library/Fonts/Supplemental/Songti.ttc",
+    # Linux
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    # Windows (常见安装路径)
+    "C:/Windows/Fonts/simhei.ttf",
+    "C:/Windows/Fonts/msyh.ttc",
 ]
 
 

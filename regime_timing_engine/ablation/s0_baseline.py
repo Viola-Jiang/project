@@ -60,7 +60,7 @@ def make_diagnostic_plot(const_df, ma_df, save_path: Path):
     const_equity = np.exp(np.cumsum(const_df["w_held"].shift(1).fillna(0.0) * const_df["log_return"]))
     ma_equity = np.exp(np.cumsum(ma_df["w_held"].shift(1).fillna(0.0) * ma_df["log_return"]))
     axes[0].plot(const_df["date"], const_equity, color="gray", lw=1.2, label="S0恒定满仓")
-    axes[0].plot(ma_df["date"], ma_equity, color="#3f6fa8", lw=1.2, label="S0均线择时(参照,不计入主表)")
+    axes[0].plot(ma_df["date"], ma_equity, color="#3f6fa8", lw=1.2, label="S0均线择时")
     axes[0].set_ylabel("净值(对数轴)")
     axes[0].set_yscale("log")
     axes[0].set_title("S0基线：恒定满仓 vs 均线择时")
