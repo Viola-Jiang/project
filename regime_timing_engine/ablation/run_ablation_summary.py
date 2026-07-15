@@ -126,7 +126,22 @@ if __name__ == "__main__":
         print("S5：已跳过。")
         print("=" * 78)
 
-    final_df = pd.DataFrame(rows)
+    # 保存各方案明细 CSV
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    detail_saves = [
+        ("s0_baseline_constant", s0_df),
+        ("s0_baseline_ma", s0_ma_df),
+        ("s1_offline_hmm", s1_df),
+        ("s2_causal_bocpd_map", s2_df),
+        ("s3_full_posterior_band", s3_df),
+        ("s4_hsmm_duration", s4_df),
+    ]
+    for name, detail_df in detail_saves:
+        path = RESULTS_DIR / f"{name}.csv"
+        detail_df.to_csv(path, index=False)
+        print(f"明细已保存 -> {path}")
+
+    # 保存汇总对比表
+    final_df = pd.DataFrame(rows)
     final_df.to_csv(RESULTS_DIR / "ablation_summary.csv", index=False)
     print(f"\n{'完整六级' if RUN_S5 else 'S0~S4五级'}对比表已保存 -> {RESULTS_DIR / 'ablation_summary.csv'}")

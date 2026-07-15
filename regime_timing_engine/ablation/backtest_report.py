@@ -146,6 +146,31 @@ def section_6_4():
 
 if __name__ == "__main__":
     df = load_data()
-    section_6_2(df)
+
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    # §6.2：以 S4 为例跑完整评估，保存指标明细
+    metrics = section_6_2(df)
+    section_62_rows = [
+        {"metric": "ann_return", "value": metrics["ann_return"]},
+        {"metric": "ann_vol", "value": metrics["ann_vol"]},
+        {"metric": "sharpe", "value": metrics["sharpe"]},
+        {"metric": "calmar", "value": metrics["calmar"]},
+        {"metric": "max_dd", "value": metrics["max_dd"]},
+        {"metric": "turnover_rate", "value": metrics["turnover_rate"]},
+        {"metric": "n_rebalance_events", "value": metrics.get("n_rebalance_events", 0)},
+        {"metric": "rebalance_gap_median_days", "value": float(np.median(metrics["rebalance_gap_days"]))
+         if len(metrics["rebalance_gap_days"]) else 0.0},
+    ]
+    for name, s in metrics["by_regime"].items():
+        section_62_rows.append({"metric": f"by_regime_{name}_ann_return", "value": s["ann_return"]})
+        section_62_rows.append({"metric": f"by_regime_{name}_sharpe", "value": s["sharpe"]})
+        section_62_rows.append({"metric": f"by_regime_{name}_n_obs", "value": s["n_obs"]})
+    pd.DataFrame(section_62_rows).to_csv(RESULTS_DIR / "backtest_report_section62_metrics.csv", index=False)
+    print(f"§6.2 指标已保存 -> {RESULTS_DIR / 'backtest_report_section62_metrics.csv'}")
+
+    # §6.1 + §6.3
     section_6_1_and_6_3()
+
+    # §6.4：保存前视偏差对照
     section_6_4()
