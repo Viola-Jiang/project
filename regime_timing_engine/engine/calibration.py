@@ -3,53 +3,65 @@ engine/calibration.py
 ======================
 对应方法论文档 §5.1「离线估参」与 §5.4「更新节奏」。
 
-本模块提供**严格因果**的区制参数估计：调用方传入的 hist_df 必须是截至当前
-决策时点为止、已经实际发生过的历史数据（不含当前及未来），函数内部也绝不
-使用任何"真实区制标签"（那是仿真数据自带的上帝视角信息，只允许在离线诊断/
-oracle上限参照场景中使用，见 04、06 脚本）。
+离线区制参数估计。给定一段历史行情，输出可直接用于在线推理的
+RegimeSoftAssigner（包含各区制的原型中心、协方差、久期模型、目标仓位）。
 
-与 06/07 脚本里另一套"监督原型"（用真实标签直接算区制中心）的关系：
-  监督原型 = oracle 上限参照，用于回答"如果区制身份是已知的，天花板在哪"；
-  本模块  = 真正可执行的因果版本，用于回答"只用过去的数据，模型自己能估到
-            什么程度"，对应文档 §5.1 "对滚动[r̄,σ]聚类（如KMeans）定K个区制，
-            按区制条件夏普标定目标暴露"。
-  两者应该分开跑、分开报告，不能把 oracle 版本的绩效当成引擎的真实绩效。
+在线推理时，RegimeSoftAssigner 需要知道"每个区制长什么样"——描述子中心
+在哪、散布多大、区制通常持续多久、该配多少仓。这些信息必须从历史数据中
+估计，且只能用当前时点之前的数据（严格因果，无未来信息）。
 
-核心函数 estimate_regime_params_causal：
-  1. 先跑一遍"影子 BOCPD"过一遍历史窗口（用简单常数hazard，此刻还没有任何
-     区制信息，这一步本身就是从零开始识别区制），逐日记录后验加权的
-     [μ̂t, σ̂t]——这正是文档§3.6"run-length后验加权的发射描述子[μ̂t,σ̂t]"
-     的字面定义，两个维度都来自同一个一维NIG发射模型的后验，不掺杂
-     任何外部特征（如原始已实现波动率）。
-  2. 对这条 [μ̂t, σ̂t] 轨迹做 KMeans 无监督聚类（不使用真实标签），得到 K 个
-     "数据驱动的区制"。
-  3. 按聚类簇的历史平均收益从高到低命名（复用 engine.regime.name_clusters_
-     by_return_rank，K=3时直接得到bull/sideways/bear，不再走通用cluster_
-     rank{i}命名——区制数已固定为3，没必要保留通用K的命名路径）。
-  4. 用聚类标签序列（而非真实标签）切分连续段，对每个聚类簇拟合久期模型
-     （复用 engine.duration 的通用函数）——duration_family 参数决定拟合哪一族：
-       "geometric" ：几何久期（HMM隐含假设，hazard恒为常数），供 S2/S3 使用，
-                     确保 S2/S3 阶段还没有引入"久期升级"这个变量。
-       "negbinom"  ：负二项久期（HSMM，hazard随年龄变化），供 S4/S5 使用。
-     这个开关是 S3→S4 消融能否成立的关键：两者除了 duration_family 不同，
-     其余全部一致，绩效落差才能干净地归因于"HSMM久期升级"本身。
-  5. 用聚类条件的历史收益均值/方差做分数凯利标定目标暴露（复用
-     engine.decision.calibrate_target_exposures），position_bounds 参数
-     透传（默认长仓(0,1)，也支持做空/杠杆的更宽区间，见该函数docstring）。
-  全部计算只读取传入的 hist_df，不接触调用方之外的任何"未来"信息。
+输入:  hist_df（含 z 列和 log_return 列，截至当前时点的历史窗口）
+输出:  (RegimeSoftAssigner, regime_stats)
 
-注：早期版本这里直接用"z的滚动均值 + log(原始已实现波动率)"做聚类特征，
-第二维绕开了 BOCPD 自己的后验、直接引入外部原始波动率——这样做的区制
-判别力更强（原始波动率未被z_t的归一化压制），但与文档§3.6"发射描述子"
-的字面定义不符（且和线上逐日软分配时用的描述子不是同一个坐标系）。现已
-改为严格对齐文档定义，代价是判别力可能下降（validation/emission_validation.py已验证z_t自身
-的信号偏弱），这是字面对齐文档后预期会出现的效果，不是bug。
+ ① 临时 BOCPD → 把 z 序列翻译成 [μ̂, σ̂] 轨迹
+    新建一个独立的 BOCPD 实例（常数 hazard=0.01），从头逐日喂入历史 z，
+    记录每一步的 NIG 后验加权 [μ̂t, σ̂t]。
 
-季度walk-forward重估的新旧参数平滑（对应文档§5.4"更新节奏"，缓解直接
-切换到新估参数造成的仓位/区制判定跳变）：blend_assigners()。按name
-（K=3固定后name稳定是bull/sideways/bear）匹配新旧原型，对
-mean_feature/cov/target_exposure以及久期分布的(mean,var)做加权平均，
-久期分布按融合后的(mean,var)重新拟合。
+ ② KMeans 聚类 → 发现区制
+    将 [μ̂, σ̂] 两维各自除以标准差做标准化，然后 KMeans（默认 K=3）。
+    得到 K 个簇，每簇有一个特征中心和一个协方差。
+
+ ③ 命名 + 久期拟合
+    按簇内对数收益均值从高到低 → bull / sideways / bear。
+    用聚类标签序列切出各区制的连续段，拟合久期分布：
+      "geometric" → 常数 hazard（几何分布），对应 HMM 假设
+      "negbinom"  → 年龄相依 hazard（负二项），对应 HSMM 升级
+    这是消融实验的核心开关：两者其余步骤完全一致，绩效差异可干净归因于
+    久期建模本身。
+
+ ④ 凯利标定 → 目标仓位 w_k*
+    对每个区制用簇内收益 μ 和 σ 算凯利仓位 f = μ/σ²，最大 f 映射到
+    仓位区间上界 hi，其余按比例缩放。默认 (lo, hi) = (0, 1) 纯多头，
+    也可传 (-1, 2) 等多空/杠杆区间。
+
+ ⑤ 打包 → RegimeSoftAssigner
+    将原型中心、协方差、久期模型、目标仓位、特征标准化尺度一并打包。
+    在线时即可对新的 [μ̂, σ̂] 做 GMM-softmax 软分配。
+
+
+第 ① 步不能借用在线主循环的 BOCPD：
+
+在线 BOCPD 的 hazard 是由当前 assigner 构造的 HSMM 混合 hazard。
+如果用它跑历史 [μ̂, σ̂] 然后聚类得到新 assigner，就形成了循环：
+  assigner(t−1) → hazard → BOCPD后验 → [μ̂,σ̂] → KMeans → assigner(t)
+新 assigner 会受到旧 assigner 的"污染"——旧版区制结构通过 hazard 渗透
+进 [μ̂, σ̂]，聚类结果就不再是纯粹的"数据在说什么"。
+
+因此第 ① 步独立新建 BOCPD，用常数 hazard=0.01——不给它任何区制先验，
+让 [μ̂, σ̂] 轨迹只反映 z 序列自身的结构。KMeans 就能无偏地发现区制。
+
+此外 KMeans 需要整条 [μ̂, σ̂] 轨迹（每个历史时点一个点），而在线 BOCPD
+只保留当前后验状态，不存储历史轨迹。
+
+────────────────────────────────────────────────────
+参数平滑 blend_assigners
+
+季度重估时直接切换新参数会导致仓位跳变。blend_assigners() 对新旧两版
+按 new_weight:(1-new_weight) 混合（默认 7:3）：
+  - mean_feature、cov、target_exposure → 直接数值加权
+  - 久期分布 → 取各自的 (mean, var) 加权后重新拟合（PMF 不能直接加权）
+  - feature_scale → 加权平均
+按 name（bull/sideways/bear）匹配新旧原型，不受 KMeans 簇编号影响。
 """
 
 from __future__ import annotations
@@ -59,8 +71,7 @@ from sklearn.cluster import KMeans
 
 from .bocpd import BOCPD
 from .duration import (
-    extract_segment_durations_from_labels, fit_regime_duration_models,
-    fit_geometric_duration, fit_negbinom_duration,
+    extract_segment_durations_from_labels, fit_geometric_duration, fit_negbinom_duration,
 )
 from .regime import RegimePrototype, RegimeSoftAssigner, name_clusters_by_return_rank
 from .decision import calibrate_target_exposures
@@ -68,12 +79,10 @@ from .decision import calibrate_target_exposures
 
 def compute_posterior_descriptor_trajectory(z_series: np.ndarray, pooled_hazard: float = 0.01):
     """
-    跑一遍"影子" BOCPD（不影响任何实际仓位决策），逐日记录后验加权的
-    [μ̂t, σ̂t]（对应文档§3.6「发射描述子」的字面定义）。
+    跑一遍临时 BOCPD（不影响任何实际仓位决策），逐日记录后验加权的[μ̂t, σ̂t]。
 
-    hazard 在这一步取一个粗糙的常数：聚类估参本身就是"从零开始识别区制"
-    这一步，此刻还没有任何区制信息可用来构造更精细的hazard（HSMM久期升级
-    是S4/S5才引入的东西，不在这一步）。
+    hazard 在这一步取一个粗糙的常数，不给它任何区制先验，让 [μ̂, σ̂] 轨迹只反映
+    z 序列自身的结构。KMeans 就能无偏地发现区制。
 
     返回: (mu_hats, sigma_hats)，长度均为 len(z_series)。
     """
@@ -98,7 +107,7 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
                       hazard随年龄变化，即HSMM久期升级）。
     position_bounds: 目标暴露的(lo, hi)区间，透传给 engine.decision.
                       calibrate_target_exposures，默认长仓(0,1)。
-    metric: RegimeSoftAssigner 的距离度量，"mahalanobis" 或 "wasserstein"。
+    metric: RegimeSoftAssigner 软分配的距离度量，"mahalanobis" 或 "wasserstein"。
     返回:
       assigner: RegimeSoftAssigner，可直接喂给在线 BOCPD 循环
       regime_stats: {cluster_name: {"mu":..., "sigma":..., "n_obs":...}}，用于日志/诊断
@@ -122,7 +131,7 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
     cluster_ids = km.fit_predict(feat_std)
 
     log_returns = hist_df["log_return"].values
-    # K=3时直接命名为bull/sideways/bear，不再走通用cluster_rank{i}命名
+    # K=3时直接命名为bull/sideways/bear
     name_of = name_clusters_by_return_rank(cluster_ids, log_returns, k)
     named_labels = pd.Series([name_of[c] for c in cluster_ids])
 
@@ -156,6 +165,9 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
     for p in prototypes:
         p.target_exposure = target_exposures[p.name]
 
+    # bandwidth=1.0 对应 GMM 的共享球形协方差 sigma=1.0*I。由于 feature_scale
+    # 已将各维度缩放至单位标准差，标准化空间中距离约等于"偏离中心几个标准差"，
+    # 此设置是 GMM 后验 softmax 的自然默认值（详见 engine/regime.py 模块 docstring）。
     assigner = RegimeSoftAssigner(prototypes, feature_scale=feature_scale, bandwidth=1.0, metric=metric)
     return assigner, regime_stats
 

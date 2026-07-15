@@ -1,7 +1,7 @@
 """
 engine/duration.py
 ==================
-对应方法论文档 §3.4「HMM与HSMM」、§3.5「久期建模、hazard函数与预期剩余久期」。
+§3.4「HMM与HSMM」、§3.5「久期建模、hazard函数与预期剩余久期」。
 
 核心思想：
   HMM 的状态自转移概率 a_ii 隐含久期服从几何分布 —— 无记忆、峰值在 d=1，
@@ -19,7 +19,7 @@ engine/duration.py
     NegBinomDuration —— 过离散，允许 hazard 随年龄非平凡变化
     GeometricDuration —— 对应 HMM 隐含假设，hazard 恒为常数（无记忆）
 
-离线估参辅助函数（对应文档 §5.1「离线估参」中的"久期分布"一步）：
+离线估参辅助函数（§5.1「离线估参」中的"久期分布"）：
   extract_segment_durations_from_labels —— 给定任意标签序列，按连续段切出
                                             久期样本（真实数据没有oracle标签，
                                             这里喂入的是 engine.regime_labeling

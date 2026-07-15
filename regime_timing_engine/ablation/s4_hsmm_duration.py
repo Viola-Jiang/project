@@ -1,7 +1,7 @@
 """
 ablation/s4_hsmm_duration.py
 ===============================
-对应方法论文档 §4.2「S4・HSMM久期升级（终版核心）」。
+§4.2「S4・HSMM久期升级（终版核心）」。
 
 "将恒定 hazard 替换为 HSMM 久期导出的年龄相依 hazard，并将'预期剩余久期'
 纳入映射（对应实现 BOCPD(duration=...)）。理论动机：修正几何久期假设、
@@ -9,8 +9,7 @@ ablation/s4_hsmm_duration.py
 进一步压低。"
 
 S4 相对 S3 只改一个变量：duration_family 从 "geometric" 换成 "negbinom"，
-并在仓位映射里加入 duration_discount（φ，随预期剩余久期收缩）。其余
-（全后验混合、不确定性收缩、无交易带、walk-forward节奏）与 S3 完全一致。
+并在仓位映射里加入 duration_discount（φ，随预期剩余久期收缩）。其余与 S3 完全一致。
 """
 
 import sys
@@ -53,15 +52,18 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
     records = []
 
     for i, row in df.iterrows():
+        # 季度重估
         if i >= MIN_HISTORY and (i - MIN_HISTORY) % REESTIMATE_EVERY == 0:
             hist = df.iloc[:i]
             try:
+                # 重估 NIG 先验（只用最近窗口的收益）
                 new_prior = fit_nig_prior_from_moments(hist["z"].values[-PRIOR_LOOKBACK:])
                 prior = blend_prior(new_prior, prior, new_weight=BLEND_NEW_WEIGHT)
                 bocpd.emission.update_prior(*prior)
             except ValueError:
                 pass
             try:
+                # 重估区制原型（KMeans + 久期拟合）
                 new_assigner, _ = estimate_regime_params_causal(
                     hist, k=k_regimes, duration_family="negbinom", position_bounds=position_bounds)
                 assigner = blend_assigners(new_assigner, assigner, duration_family="negbinom",
