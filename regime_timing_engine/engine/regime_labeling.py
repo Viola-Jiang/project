@@ -1,10 +1,8 @@
 """
 engine/regime_labeling.py
 ============================
-真实数据没有"哪天是牛市/哪天变盘"的上帝视角标签，但 validation/ 与
-ablation/ 的诊断、评估逻辑都需要一套参照标签来打分。本模块提供这套
-**自动标注的参照标签**——绝不是真值，只是模型自己在全样本上给出的事后
-参照，命名统一为 `ref_regime` / `ref_regime_age`。
+本模块提供**自动标注的参照标签**作为模型自己在全样本上给出的
+事后参照，命名统一为 `ref_regime` / `ref_regime_age`。
 
 产生方式：当前直接复用 `engine/hmm_offline.py` 已有的 `fit_hmm` +
 `decode_smoothed`，即 ablation §4.2 S1 使用的那套"全样本 GaussianHMM +
@@ -29,8 +27,7 @@ def auto_label_regimes(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: 
     """
     输入: df 至少包含 ['z', 'realized_vol', 'log_return'] 三列，按日期升序排列。
     输出: df 的副本，新增两列：
-      ref_regime      —— 自动标注的参照区制名（离线全样本HMM平滑解码得到，
-                          不是真值）
+      ref_regime      —— 自动标注的参照区制名（离线全样本HMM平滑解码得到）
       ref_regime_age  —— 该参照标签连续段内的段龄（每段第一天为1）
 
     k=3 时按收益排名映射为 bull/sideways/bear，方便直接复用

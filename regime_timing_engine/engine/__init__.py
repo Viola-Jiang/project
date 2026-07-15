@@ -1,21 +1,153 @@
 """
 engine
 ======
-全天候指数仓位择时框架的核心可复用模块。对应方法论报告《贝叶斯在线变点检测
-与久期感知状态机》第三节「理论基础」的工程落地。
+全天候指数仓位择时框架的核心可复用模块。
 
-子模块：
-  emission    - NIG共轭发射模型 + Student-t预测分布 + 按历史矩标定先验    （文档 §3.3, §5.1）
-  duration    - 离散久期分布、hazard函数、预期剩余久期、分段久期提取/拟合  （文档 §3.4-3.5, §5.1）
-  bocpd       - 贝叶斯在线变点检测主递归引擎                            （文档 §3.2）
-  regime      - 区制原型与softmax软分配                                （文档 §3.6）
-  decision    - 目标暴露标定、久期折减、不确定性收缩、
-                仓位映射、无交易带调仓                                  （文档 §3.7, §5.3）
-  calibration - 严格因果的 walk-forward 区制参数估计（无监督聚类，不使用
-                真实标签），供 §5.1/§5.4 的"季度滚动重估"使用
-  plotting    - 绘图辅助工具（中文字体加载、区制背景着色）
+────────────────────────────────────────────────────
+模块一览
+────────────────────────────────────────────────────
+  emission       — NIG 共轭发射模型、Student-t 预测分布、先验标定
+  duration       — 离散久期分布、hazard 函数、分段久期提取与拟合
+  bocpd          — 贝叶斯在线变点检测主递归引擎
+  regime         — 区制原型与 softmax 软分配
+  decision       — 凯利仓位标定、久期折减、不确定性收缩、调仓引擎
+  calibration    — 严格因果的 walk-forward 区制参数季度重估
+  evaluation     — 回测绩效指标（夏普、最大回撤、Deflated Sharpe、BH-FDR 等）
+  hmm_offline    — 离线 HMM（前视上界参照），含 Viterbi 平滑与 forward 滤波两种解码
+  features       — 原始数据预处理：对数收益 → z-score → 已实现波动率
+  regime_labeling — 基于 HMM 的真实区制自动标定（仅用于仿真/验证数据）
+  plotting       — 中文字体加载、区制背景着色等绘图辅助
 
-`ablation/`（真实数据处理与策略回测执行链路）与 `validation/`（组件级
-正确性/行为验证，非实际执行）两个目录下的脚本都依赖并调用本包，本包不
-依赖它们，保持单向依赖、避免脚本互相 import。
+────────────────────────────────────────────────────
+结构约定
+────────────────────────────────────────────────────
+本包是框架的中枢。ablation/ 和 validation/ 两个目录下的所有脚本单向依赖本包。
 """
+
+# ---------- emission ----------
+from .emission import (
+    NIGConjugateEmission,
+    batch_nig_posterior,
+    fit_nig_prior_from_moments,
+)
+
+# ---------- duration ----------
+from .duration import (
+    DiscreteDurationModel,
+    extract_segment_durations_from_labels,
+    fit_geometric_duration,
+    fit_negbinom_duration,
+    fit_regime_duration_models,
+)
+
+# ---------- bocpd ----------
+from .bocpd import (
+    BOCPD,
+    BOCPDStepResult,
+)
+
+# ---------- regime ----------
+from .regime import (
+    RegimePrototype,
+    RegimeSoftAssigner,
+    name_clusters_by_return_rank,
+)
+
+# ---------- decision ----------
+from .decision import (
+    RebalanceEngine,
+    apply_uncertainty_shrinkage,
+    calibrate_target_exposures,
+    duration_discount,
+    uncertainty_shrinkage,
+)
+
+# ---------- calibration ----------
+from .calibration import (
+    blend_assigners,
+    compute_posterior_descriptor_trajectory,
+    estimate_regime_params_causal,
+)
+
+# ---------- evaluation ----------
+from .evaluation import (
+    benjamini_hochberg,
+    compute_backtest_metrics,
+    deflated_sharpe_ratio,
+    detection_lag_stats,
+    print_metrics,
+    purged_embargo_windows,
+)
+
+# ---------- hmm_offline ----------
+from .hmm_offline import (
+    calibrate_state_exposures,
+    decode_filtered,
+    decode_smoothed,
+    fit_hmm,
+    fit_offline_hmm_positions,
+)
+
+# ---------- features ----------
+from .features import preprocess
+
+# ---------- regime_labeling ----------
+from .regime_labeling import auto_label_regimes
+
+# ---------- plotting ----------
+from .plotting import (
+    REGIME_COLORS,
+    setup_cjk_font,
+    shade_regimes,
+)
+
+__all__ = [
+    # emission
+    "NIGConjugateEmission",
+    "batch_nig_posterior",
+    "fit_nig_prior_from_moments",
+    # duration
+    "DiscreteDurationModel",
+    "extract_segment_durations_from_labels",
+    "fit_geometric_duration",
+    "fit_negbinom_duration",
+    "fit_regime_duration_models",
+    # bocpd
+    "BOCPD",
+    "BOCPDStepResult",
+    # regime
+    "RegimePrototype",
+    "RegimeSoftAssigner",
+    "name_clusters_by_return_rank",
+    # decision
+    "RebalanceEngine",
+    "apply_uncertainty_shrinkage",
+    "calibrate_target_exposures",
+    "duration_discount",
+    "uncertainty_shrinkage",
+    # calibration
+    "blend_assigners",
+    "compute_posterior_descriptor_trajectory",
+    "estimate_regime_params_causal",
+    # evaluation
+    "benjamini_hochberg",
+    "compute_backtest_metrics",
+    "deflated_sharpe_ratio",
+    "detection_lag_stats",
+    "print_metrics",
+    "purged_embargo_windows",
+    # hmm_offline
+    "calibrate_state_exposures",
+    "decode_filtered",
+    "decode_smoothed",
+    "fit_hmm",
+    "fit_offline_hmm_positions",
+    # features
+    "preprocess",
+    # regime_labeling
+    "auto_label_regimes",
+    # plotting
+    "REGIME_COLORS",
+    "setup_cjk_font",
+    "shade_regimes",
+]

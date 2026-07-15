@@ -1,10 +1,7 @@
 """
 engine/evaluation.py
 =====================
-对应方法论文档 §6「回测框架与统计检验」。这是 S0~S5 六个消融级别**唯一**
-共用的评估入口——消融实验能不能成立，前提就是每一级的绩效数字都来自同一个
-函数、同一套口径，绩效差异才能归因到"这一级引入的改动"，而不是"评估方式
-不小心也变了"。
+§6「回测框架与统计检验」。这是 S0~S5 六个级别**唯一**共用的评估入口。
 
 对应关系：
   compute_backtest_metrics  -> §6.2 评估口径（年化收益/夏普/Calmar/最大回撤/
@@ -23,7 +20,7 @@ from scipy.stats import norm, skew, kurtosis
 
 
 # ============================================================================
-# §6.2 评估口径：六个消融级别必须调用同一个函数
+# §6.2 评估口径
 # ============================================================================
 def compute_backtest_metrics(log_return, w_held, lag: int = 1, regime_labels=None) -> dict:
     """
@@ -89,7 +86,7 @@ def print_metrics(label: str, metrics: dict) -> None:
 
 
 # ============================================================================
-# §6.2 检测滞后：仅适用于基于 BOCPD 的级别（S2-S5），S0/S1 不涉及在线变点检测
+# §6.2 检测滞后
 # ============================================================================
 def detection_lag_stats(ref_regime_age, changepoint_signal, threshold: float = 0.5,
                          max_search_window: int = 30) -> dict:
@@ -127,7 +124,7 @@ def detection_lag_stats(ref_regime_age, changepoint_signal, threshold: float = 0
 
 
 # ============================================================================
-# §6.3 Deflated Sharpe Ratio（Bailey & Lopez de Prado, 2014）
+# §6.3 Deflated Sharpe Ratio
 # ============================================================================
 def deflated_sharpe_ratio(strategy_returns, n_trials: int, freq: int = 252) -> dict:
     """
@@ -174,7 +171,7 @@ def deflated_sharpe_ratio(strategy_returns, n_trials: int, freq: int = 252) -> d
 
 
 # ============================================================================
-# §6.3 BH-FDR 多重检验校正（Benjamini-Hochberg, 1995）
+# §6.3 BH-FDR 多重检验校正
 # ============================================================================
 def benjamini_hochberg(p_values, alpha: float = 0.05) -> np.ndarray:
     """
@@ -200,7 +197,7 @@ def benjamini_hochberg(p_values, alpha: float = 0.05) -> np.ndarray:
 
 
 # ============================================================================
-# §6.1 防泄漏：Purged K-Fold + Embargo，用于 S5 的多窗口稳健性切分
+# §6.1 防泄漏：Purged K-Fold + Embargo
 # ============================================================================
 def purged_embargo_windows(n_obs: int, n_windows: int, embargo_frac: float = 0.02) -> list[tuple[int, int]]:
     """

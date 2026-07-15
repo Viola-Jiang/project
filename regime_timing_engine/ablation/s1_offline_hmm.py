@@ -1,7 +1,7 @@
 """
 ablation/s1_offline_hmm.py
 =============================
-对应方法论文档 §4.2「S1・离线HMM（前视上界参照）」。
+§4.2「S1・离线HMM」。
 
 "以全样本估计的两/多状态 HMM、平滑状态序列驱动仓位。该版本隐含使用了未来
 信息，不可上线，仅作'区制信息理论上界'的参照。其与 S2 的绩效落差，即量化了
@@ -33,7 +33,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 def generate_positions(df: pd.DataFrame, k: int = K_REGIMES, seed: int = 0):
     """
-    对整段历史一次性拟合离线HMM并给出平滑仓位序列（刻意允许前视，见模块docstring）。
+    对整段历史一次性拟合离线HMM并给出平滑仓位序列。
     返回: (DataFrame['date','ref_regime','log_return','w_held'], state_stats)
     """
     w_target, state_stats = fit_offline_hmm_positions(df, k=k, seed=seed)
@@ -75,14 +75,14 @@ if __name__ == "__main__":
     df = load_data()
     result_df, state_stats = generate_positions(df)
 
-    print("=== S1 离线HMM（前视上界参照，不可执行）===")
+    print("=== S1 离线HMM===")
     print("各隐藏状态的收益统计与标定暴露：")
     for name, s in state_stats.items():
         print(f"  {name}: mu={s['mu']:.5f}, sigma={s['sigma']:.5f}, w*={s['target_exposure']:.2f}")
 
     metrics = compute_backtest_metrics(result_df["log_return"], result_df["w_held"],
                                         regime_labels=result_df["ref_regime"])
-    print_metrics("S1-离线HMM(不可执行)", metrics)
+    print_metrics("S1-离线HMM", metrics)
     print("分区制绩效:")
     for name, s in metrics["by_regime"].items():
         print(f"  {name}: 年化收益={s['ann_return']*100:.2f}%  夏普={s['sharpe']:.2f}  n={s['n_obs']}")

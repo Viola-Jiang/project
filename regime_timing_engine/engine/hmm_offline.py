@@ -1,26 +1,30 @@
 """
 engine/hmm_offline.py
 =======================
-对应方法论文档 §4.2「S1・离线HMM（前视上界参照）」、§3.4「HMM与HSMM」、
-以及 §6.4「前视偏差对照实验」。
+§4.2「S1・离线HMM（前视上界参照）」、§3.4「HMM与HSMM」、§6.4「前视偏差对照实验」。
 
-本模块提供同一个 HMM 的两种解码方式，供两处不同用途：
+作为整个系统的上限参考：HMM 看了全部数据（含未来）做状态推断，
+能给出一份"如果区制身份已知"的仓位曲线。这个上限用来衡量因果方案
+（BOCPD，只能看过去）还剩多少改进空间。
 
-  decode_smoothed（Viterbi，平滑）——用全部观测（含"未来"）给出最可能的
-    状态路径。这是 S1 使用的解码方式，也是文档 §6.4 对照实验里"平滑"的一侧。
+用 [z, log(realized_vol)] 两维特征，EM 算法拟合 GaussianHMM。
+由于 EM 对随机初始化敏感（坏种子可能让某个状态的转移概率退化到接近 0，
+导致状态逐日翻转），用 n_restarts 个不同种子各跑一遍，取对数似然最高者。
 
-  decode_filtered（前向算法，滤波）——只用截至当前时刻的观测递归计算
-    P(z_t | x_1:t)，不看任何未来观测，严格因果。这是文档 §6.4 对照实验里
-    "滤波"的一侧，也是"BOCPD 天然为滤波形态"这句话里"滤波"的准确含义。
+使用两种解码方式：
+共用同一个拟合好的 HMM（同一组均值/协方差/转移矩阵），唯一区别是
+解码时能看多少数据：
 
-两种解码共用**同一个**已拟合模型（同一组参数）与**同一套**状态->目标暴露
-标定（都来自 smoothed 状态的收益统计），确保二者唯一的差异就是"状态估计
-时看没看未来"这一件事——这样绩效落差才能被干净地解释为"前视偏差幅度"
-（§6.4），而不会和"模型/标定不同"这些别的变量混在一起。
+  decode_smoothed — Viterbi 平滑
+    看完整段数据后反推每个时点的最可能状态。用来做上限参照，知道后面的行情再判断当时是什么状态。
 
-S1（ablation/s1_offline_hmm.py）只用 decode_smoothed；
-§6.4 对照实验（ablation/lookahead_contrast.py）把 decode_smoothed 和
-decode_filtered 都跑一遍、同台对比。
+  decode_filtered — 前向滤波
+    只用当前及之前的数据逐日递推 P(z_t | 历史)，推断过程不偷看未来。
+    它复用的 HMM 参数（means_, covars_, transmat_）来自全样本 EM。
+    参数估计本身不是因果的。因此它和 decode_smoothed 的绩效差异只隔离了
+    "推断"前视，不是完整的前视偏差（参数前视仍然在）。
+
+拿到状态序列 → 按状态算收益统计 → 凯利公式标定目标仓位 → 模拟交易绩效。
 """
 
 from __future__ import annotations
@@ -39,12 +43,12 @@ def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5):
     df 允许是整段历史（含"未来"），这是 S1/§6.4 故意要展示的前视行为。
 
     GaussianHMM 的 EM 对随机初始化敏感：单一种子有一定概率收敛到明显更差的
-    局部最优（典型症状：某状态自转移概率退化到接近0，导致状态逐日翻转、
-    没有诊断价值），这对 S1 尤其致命——S1 的角色是"允许前视的信息上限参照"，
-    若这里恰好收敛到差的局部最优，S1 可能反而跑不赢因果版本，S1 vs S2 的
-    "前视偏差"量化就失去意义。用 n_restarts 个不同种子各拟合一次，按对数
-    似然 model.score(feat) 取最优，避免因初始化不走运而产出一份质量很差的
-    模型（同一机制也被 engine/regime_labeling.py 的自动标注复用）。
+    局部最优（某状态自转移概率退化到接近0，导致状态逐日翻转、没有诊断价值）。
+    这对 S1 尤其致命：S1 的角色是"允许前视的信息上限参照"，若这里恰好收敛到差的局部最优，
+    S1 可能反而跑不赢因果版本，S1 vs S2 的"前视偏差"量化就失去意义。
+    用 n_restarts 个不同种子各拟合一次，按对数似然 model.score(feat) 取最优，
+    避免因初始化不走运而产出一份质量很差的模型（同一机制也被 engine/regime_labeling.py 
+    的自动标注复用）。
 
     返回: (拟合好的模型, 特征矩阵)
     """
@@ -61,7 +65,7 @@ def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5):
 
 def decode_smoothed(model: GaussianHMM, feat: np.ndarray) -> np.ndarray:
     """
-    Viterbi 解码：用全部观测（前后都看）给出最可能的状态路径，即"平滑"。
+    Viterbi 解码：用全部观测给出最可能的状态路径，即"平滑"。
     对应文档"以全样本估计的两/多状态HMM、平滑状态序列驱动仓位"。
     """
     return model.predict(feat)
@@ -69,19 +73,16 @@ def decode_smoothed(model: GaussianHMM, feat: np.ndarray) -> np.ndarray:
 
 def decode_filtered(model: GaussianHMM, feat: np.ndarray) -> np.ndarray:
     """
-    前向算法（forward algorithm）解码：只用 x_1:t 递归计算 P(z_t|x_1:t)，
-    不使用任何 t 之后的观测，严格因果，即"滤波"。
+    前向算法解码：只用当日及之前的观测，逐日递推 P(z_t | x_1:t)。
 
-    递归（对数空间，避免数值下溢）：
-      log alpha_1(i) = log pi_i + log b_i(x_1)
-      log alpha_t(i) = logsumexp_j[log alpha_{t-1}(j) + log A_ji] + log b_i(x_t)
-    每一步归一化 exp(log_alpha_t) 即得 P(z_t=i | x_1:t)。
-    取每步后验的 argmax 作为该步的滤波状态估计。
+    递推公式（对数空间）：
+      t=1:  alpha_1(i) = P(z_1=i) × b_i(x_1)               ← startprob_
+      t>1:  alpha_t(i) = Σ_j [alpha_{t-1}(j) × A_ji] × b_i(x_t)  ← transmat_
+    每步归一化后取 argmax 作为该步状态。
 
-    这里复用 model 已经用全样本 EM 拟合好的参数（means_/covars_/transmat_/
-    startprob_）——§6.4 要对照的是"状态推断时用没用未来观测"，不是"参数
-    估计用没用未来数据"（后者已经在 engine/calibration.py 的 walk-forward
-    机制里单独处理），两件事分开控制变量。
+    推断过程是因果的（不看未来），但参数 (means_, covars_, transmat_,
+    startprob_) 来自全样本 EM 拟合，包含了未来信息。因此 decode_filtered
+    不是严格因果的完整方案，只用于隔离"推断前视"这一个变量。
     """
     T, k = len(feat), model.n_components
     log_b = np.column_stack([
