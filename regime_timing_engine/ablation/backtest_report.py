@@ -1,9 +1,8 @@
 """
 ablation/backtest_report.py
 ==============================
-对应方法论文档 §6「回测框架与统计检验」的完整交付：把 §6.1~§6.4 四项要求
-串成一份报告（§6.5 方法论流程验证已经由 validation/ + ablation/ 整体覆盖，
-不在本脚本重复）。
+§6「回测框架与统计检验」的完整交付：把 §6.1~§6.4 四项要求串成一份报告
+（§6.5 方法论流程验证已经由 validation/ + ablation/ 整体覆盖）。
 
 §6.1 防泄漏（walk-forward; Purged K-Fold + Embargo）
   —— S2~S5 全部走 engine/calibration.py 的因果 walk-forward 估参；

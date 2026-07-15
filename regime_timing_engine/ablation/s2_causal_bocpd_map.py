@@ -1,7 +1,7 @@
 """
 ablation/s2_causal_bocpd_map.py
 ==================================
-对应方法论文档 §4.2「S2・因果BOCPD（首个可上线版）」。
+§4.2「S2・因果BOCPD」。
 
 "将 S1 替换为严格因果的 BOCPD，以 MAP run-length / 区制给出离散仓位。
 理论动机：在线滤波规避前视。验证：在因果约束下，S2 应显著优于'同样退化为
@@ -86,7 +86,7 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         z_t = row["z"]
         regime_names = assigner.names
 
-        # 构造今天hazard只能用step前的信息（这是循环依赖里避不开的一环）
+        # 构造今天hazard只能用step前的信息
         posterior_prev = np.exp(bocpd.log_run_length_posterior)
         mu_hat_prev, sigma_hat_prev = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
         regime_probs_prev = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))
@@ -95,8 +95,7 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         h_mix = assigner.mixture_hazard(regime_probs_prev, run_lengths)
         result = bocpd.step(z_t, hazards_override=h_mix)
 
-        # step()跑完后用最新后验重新算一次区制概率，这个更准的版本才是"今天"
-        # 真正用于仓位决策/记录的区制判定——不是继续沿用上面那个偏旧的版本
+        # step()跑完后用最新后验重新算一次区制概率，用于仓位决策/记录的区制判定
         posterior_now = np.exp(bocpd.log_run_length_posterior)
         mu_hat_now, sigma_hat_now = bocpd.emission.posterior_weighted_mean_scale(posterior_now)
         regime_probs = assigner.assign(np.array([mu_hat_now, sigma_hat_now]))

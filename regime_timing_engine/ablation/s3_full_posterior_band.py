@@ -1,20 +1,16 @@
 """
 ablation/s3_full_posterior_band.py
 =====================================
-对应方法论文档 §4.2「S3・全后验映射 + 无交易带」。
+§4.2「S3・全后验映射 + 无交易带」。
 
-"不再以 MAP 硬切，而是将完整 run-length / 区制后验映射为连续仓位，叠加
-无交易带 δ。理论动机：保留不确定性信息、平滑敞口、抑制噪声触发。
+"将完整 run-length / 区制后验映射为连续仓位，叠加无交易带 δ。
+理论动机：保留不确定性信息、平滑敞口、抑制噪声触发。
 验证：夏普提升且换手显著下降。"
 
 S3 相对 S2 只改两个变量（结构增益）：
   1. 区制混合暴露：用全部区制的后验概率加权目标暴露（而非只取MAP硬切），
      再叠加"后验熵越大、仓位越收缩向中性"的不确定性收缩 ψ（对应§3.7）。
   2. 无交易带：仓位变动、变点概率、区制翻转任一触发才调仓（RebalanceEngine）。
-
-**尚未引入**HSMM久期升级（那是S4的贡献）：duration_family 仍然是
-"geometric"（几何/常数hazard），也不调用 duration_discount（φ≡1）——
-这样 S3→S4 的绩效落差才能干净地归因于"久期升级"这一个变量。
 """
 
 import sys
@@ -45,8 +41,6 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
                         position_bounds: tuple = (0.0, 1.0)) -> pd.DataFrame:
     """
     因果 walk-forward + BOCPD + 全后验混合暴露 + 不确定性收缩 + 无交易带。
-    与 S2 唯一的估参差异：duration_family 仍是 geometric（常数hazard），
-    没有久期折减这一步（那是S4）。季度重估的7:3平滑与hazard-refine同S2。
     """
     lo, hi = position_bounds
     neutral = (lo + hi) / 2.0
@@ -84,7 +78,7 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         z_t = row["z"]
         regime_names = assigner.names
 
-        # 构造今天hazard只能用step前的信息（这是循环依赖里避不开的一环）
+        # 构造今天hazard只能用step前的信息
         posterior_prev = np.exp(bocpd.log_run_length_posterior)
         mu_hat_prev, sigma_hat_prev = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
         regime_probs_prev = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))
@@ -102,7 +96,7 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         proto_by_name = {p.name: p for p in assigner.prototypes}
         mixture_exposure = sum(regime_probs[i2] * proto_by_name[name].target_exposure
                                 for i2, name in enumerate(regime_names))
-        # 没有久期折减：phi恒为1（S4才引入）
+        # 没有久期折减：phi恒为1
         w_raw = apply_uncertainty_shrinkage(mixture_exposure, result.posterior_entropy,
                                              lam=lam_uncertainty, neutral=neutral)
         w_raw = float(np.clip(w_raw, lo, hi))

@@ -61,12 +61,28 @@ if __name__ == "__main__":
     s4_df = s4_hsmm_duration.generate_positions(df)
     rows.append(run_level("S4-HSMM久期升级(终版核心)", s4_df, executable=True))
 
+    # 链式净增量（S1相对S0-恒定满仓、S2相对S1……）先按上面5行算完，
+    # 确保S0-均线择时这个次要参照后续插入时不会打断这条链
     summary_df = pd.DataFrame(rows)
     summary_df["sharpe_delta_vs_prev"] = summary_df["sharpe"].diff()
     summary_df["max_dd_delta_vs_prev"] = summary_df["max_dd"].diff()
 
+    # S0-均线择时不参与链式对比（它和S0-恒定满仓是同一级的两种可选基线，不是
+    # 递进关系），净增量单独相对S0-恒定满仓计算，再插入到S0和S1之间展示
+    s0_ma_df = s0_baseline.generate_positions(df, mode="ma")
+    s0_ma_row = run_level("S0-均线择时(次要参照)", s0_ma_df, executable=True)
+    s0_const_row = summary_df.iloc[0]
+    s0_ma_row["sharpe_delta_vs_prev"] = s0_ma_row["sharpe"] - s0_const_row["sharpe"]
+    s0_ma_row["max_dd_delta_vs_prev"] = s0_ma_row["max_dd"] - s0_const_row["max_dd"]
+    rows.insert(1, s0_ma_row)
+    summary_df = pd.concat(
+        [summary_df.iloc[[0]], pd.DataFrame([s0_ma_row]), summary_df.iloc[1:]],
+        ignore_index=True,
+    )
+
     print("\n" + "=" * 78)
-    print("S0~S4 对比表（净增量 = 本级 - 上一级）")
+    print("S0~S4 对比表（净增量 = 本级 - 上一级；S0-均线择时的净增量例外，"
+          "相对S0-恒定满仓计算，因为二者是同级的两种可选基线而非递进关系）")
     print("=" * 78)
     print(summary_df.to_string(index=False, float_format=lambda x: f"{x:.3f}"))
 
