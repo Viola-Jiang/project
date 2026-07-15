@@ -82,7 +82,7 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         z_t = row["z"]
         regime_names = assigner.names
 
-        # 构造今天hazard只能用step前的信息（这是循环依赖里避不开的一环）
+        # 构造今天hazard只能用step前的信息
         posterior_prev = np.exp(bocpd.log_run_length_posterior)
         mu_hat_prev, sigma_hat_prev = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
         regime_probs_prev = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))

@@ -1,7 +1,7 @@
 """
 engine/calibration.py
 ======================
-对应方法论文档 §5.1「离线估参」与 §5.4「更新节奏」。
+§5.1「离线估参」与 §5.4「更新节奏」。
 
 离线区制参数估计。给定一段历史行情，输出可直接用于在线推理的
 RegimeSoftAssigner（包含各区制的原型中心、协方差、久期模型、目标仓位）。
@@ -71,7 +71,8 @@ from sklearn.cluster import KMeans
 
 from .bocpd import BOCPD
 from .duration import (
-    extract_segment_durations_from_labels, fit_geometric_duration, fit_negbinom_duration,
+    extract_segment_durations_from_labels,
+    fit_geometric_duration, fit_negbinom_duration,
 )
 from .regime import RegimePrototype, RegimeSoftAssigner, name_clusters_by_return_rank
 from .decision import calibrate_target_exposures
@@ -141,16 +142,13 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
     for old_c, name in name_of.items():
         mask = cluster_ids == old_c
         mean_feature = feat[mask].mean(axis=0)
-        # 协方差在原始特征空间下计算（不是feat_std），RegimeSoftAssigner内部
-        # 自己按feature_scale标准化——全仓库只在一处维护"标准化"这件事
         cov = np.cov(feat[mask], rowvar=False) if mask.sum() > 1 else np.eye(feat.shape[1]) * 1e-6
 
-        if duration_family == "negbinom":
-            duration_model, _, durations = fit_regime_duration_models(seg_stats, name, max_duration=max_duration)
-        else:  # geometric
-            durations = seg_stats.loc[seg_stats["regime"] == name, "duration"].values.astype(float)
-            duration_model = fit_geometric_duration(durations.mean(), d_min=1, max_duration=max_duration,
-                                                      name=f"{name}_geometric")
+        durations = seg_stats.loc[seg_stats["regime"] == name, "duration"].values.astype(float)
+        mean_d = durations.mean()
+        var_d = durations.var(ddof=1) if len(durations) > 1 else mean_d * 2
+        duration_model = _refit_duration_like(duration_family, mean_d, var_d, max_duration,
+                                               name=f"{name}_{duration_family}")
 
         prototypes.append(RegimePrototype(name=name, mean_feature=mean_feature, duration_model=duration_model,
                                            cov=cov, n_obs=int(mask.sum())))
@@ -166,15 +164,14 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
         p.target_exposure = target_exposures[p.name]
 
     # bandwidth=1.0 对应 GMM 的共享球形协方差 sigma=1.0*I。由于 feature_scale
-    # 已将各维度缩放至单位标准差，标准化空间中距离约等于"偏离中心几个标准差"，
-    # 此设置是 GMM 后验 softmax 的自然默认值（详见 engine/regime.py 模块 docstring）。
+    # 已将各维度缩放至单位标准差，标准化空间中距离约等于"偏离中心几个标准差"。
     assigner = RegimeSoftAssigner(prototypes, feature_scale=feature_scale, bandwidth=1.0, metric=metric)
     return assigner, regime_stats
 
 
 def _refit_duration_like(duration_family: str, mean: float, var: float,
                           max_duration: int, name: str):
-    """按 duration_family 用融合后的(mean, var)重新拟合久期分布，供 blend_assigners 使用。"""
+    """按 duration_family 用融合后的(mean, var)重新拟合久期分布。"""
     if duration_family == "negbinom":
         try:
             return fit_negbinom_duration(mean, var, d_min=1, max_duration=max_duration, name=name)
@@ -187,20 +184,17 @@ def blend_assigners(new_assigner: RegimeSoftAssigner, old_assigner: "RegimeSoftA
                      duration_family: str, new_weight: float = 0.7, max_duration: int = 2000
                      ) -> RegimeSoftAssigner:
     """
-    季度walk-forward重估的新旧参数平滑（对应文档§5.4"更新节奏"）：直接切换到
+    季度walk-forward重估的新旧参数平滑（§5.4"更新节奏"）：直接切换到
     新一轮估参结果会造成仓位/区制判定的跳变，这里对新旧两版原型做
     new_weight:1-new_weight 的加权平均过渡。
 
-    old_assigner is None（首次重估，还没有"旧版"可言）时直接返回 new_assigner，
-    不做任何混合。按 name 匹配新旧原型——K=3固定后 name 稳定是bull/sideways/
-    bear（见 engine.regime.name_clusters_by_return_rank），不会因为某次KMeans
-    聚类簇编号打乱而对错对象。
+    old_assigner is None（首次重估）时直接返回 new_assigner，不做任何混合。
+    按 name 匹配新旧原型。K=3固定后 name 稳定是bull/sideways/bear。
 
     对 mean_feature/cov/target_exposure 直接做数值加权平均；久期分布没有
     "加权平均两个pmf"这种简单操作，改为取各自的 (mean, var) 做加权平均后，
     用 duration_family 对应的拟合函数（engine.duration.fit_negbinom_duration /
-    fit_geometric_duration）重新拟合一个新的 DiscreteDurationModel——复用
-    现有拟合函数，不新写久期数学。
+    fit_geometric_duration）重新拟合一个新的 DiscreteDurationModel。
     """
     if old_assigner is None:
         return new_assigner
