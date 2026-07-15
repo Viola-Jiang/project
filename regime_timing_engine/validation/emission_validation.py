@@ -2,14 +2,10 @@
 validation/emission_validation.py
 ====================================
 对应方法论文档 §3.3「共轭发射与 Student-t 预测分布」。
+这是组件级正确性/行为验证脚本，不是实际执行链路的一部分。
 
-这是组件级正确性/行为验证脚本，不是实际执行链路的一部分——只验证
-engine/emission.py 里的数学/公式对不对，跟策略怎么配置无关。真正的
-数据处理与策略回测链路在 ablation/（01_data_loading.py 开始）。
-
-真实数据没有上帝视角的区制标签，B/C 两类验证改用 engine/regime_labeling
-产出的 ref_regime/ref_regime_age——离线全样本HMM给出的**参照标签，不是
-真值**（详见该模块docstring）。
+真实数据没有上帝视角的区制标签，下文中 B/C 两类验证改用 engine/regime_labeling
+产出的 ref_regime/ref_regime_age——离线全样本HMM给出的**参照标签。
 
 三类验证：
   A. 正确性校验：在线增量递归 vs 批量闭式公式，误差应 < 1e-8。
@@ -134,8 +130,8 @@ def test_within_segment_convergence_and_changepoint_sensitivity():
     if changepoint_log_pi < normal_log_pi:
         print("（本例）变点处预测似然显著低于段内正常水平，符合预期。")
     else:
-        print("（本例）变点处预测似然并未低于段内正常水平——仅说明这一个具体变点信号偏弱，"
-              "不代表机制有问题，普遍性结论见下面 C 的全量统计。")
+        print("（本例）变点处预测似然并未低于段内正常水平，说明这一个具体变点信号偏弱。"
+              "普遍性结论见下面 C 的全量统计。")
     return trace_df
 
 

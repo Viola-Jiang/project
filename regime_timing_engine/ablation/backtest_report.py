@@ -24,8 +24,10 @@ ablation/backtest_report.py
 运行方式：
   python ablation/backtest_report.py
   (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py；若
-   outputs/ablation/results/ 下还没有 s5_multi_seed_robustness.csv /
-   lookahead_contrast.csv，本脚本会自动现跑一遍)
+   outputs/ablation/results/ 下还没有 lookahead_contrast.csv，本脚本会自动
+   现跑一遍。§6.1/§6.3 依赖 s5_multi_seed_robustness.csv，受
+   ablation.common.RUN_S5 开关控制，RUN_S5=False（当前默认）时直接跳过，
+   不要求S5已经跑过、也不会现跑)
 """
 
 import sys
@@ -37,7 +39,7 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
-from ablation.common import load_data, RESULTS_DIR, FIGURES_DIR  # noqa: E402
+from ablation.common import load_data, RESULTS_DIR, FIGURES_DIR, RUN_S5  # noqa: E402
 from ablation.s4_hsmm_duration import generate_positions as generate_positions_s4  # noqa: E402
 from engine.evaluation import (  # noqa: E402
     compute_backtest_metrics, print_metrics, detection_lag_stats,
@@ -102,6 +104,9 @@ def section_6_1_and_6_3():
     print("\n" + "=" * 78)
     print("§6.1 防泄漏 + §6.3 统计去伪（汇总自 ablation/s5_multi_seed_robustness.py）")
     print("=" * 78)
+    if not RUN_S5:
+        print("已跳过（ablation.common.RUN_S5=False，暂不涉及S5相关内容）")
+        return
     s5_path = RESULTS_DIR / "s5_multi_seed_robustness.csv"
     if not s5_path.exists():
         print("未找到S5结果，现跑一遍...")
@@ -111,11 +116,6 @@ def section_6_1_and_6_3():
         print(f"读取已有结果 -> {s5_path}")
         trials_df = pd.read_csv(s5_path)
         trials = trials_df.to_dict("records")
-
-    print(f"\n§6.1 防泄漏机制：S2~S5全部为causal walk-forward估参（engine/calibration.py）；"
-          f"S5额外用Purged K-Fold + Embargo（engine/evaluation.purged_embargo_windows）"
-          f"把唯一一份真实序列切成{len(trials)}个带隔离带的不重叠时间窗，"
-          f"避免滚动特征跨窗口边界泄漏。")
 
     sharpes = np.array([t["sharpe"] for t in trials])
     print(f"\n§6.3 统计去伪：{len(trials)}次独立试验，夏普均值={sharpes.mean():.2f}，"
@@ -149,12 +149,3 @@ if __name__ == "__main__":
     section_6_2(df)
     section_6_1_and_6_3()
     section_6_4()
-
-    print("\n" + "=" * 78)
-    print("§6 小结")
-    print("=" * 78)
-    print("四项要求（防泄漏/评估口径/统计去伪/前视对照）均已落地为可运行代码，"
-          "而不是文档里的文字描述。诚实的结论仍然是：S5的统计去伪没有通过"
-          "（BH-FDR校正后0个试验显著，Deflated Sharpe Ratio<0.4），意味着"
-          "现阶段的策略边际优势尚不能在统计上被证实，这正是防泄漏与统计去伪"
-          "机制存在的意义——防止在样本不足时把噪声误认成信号。")

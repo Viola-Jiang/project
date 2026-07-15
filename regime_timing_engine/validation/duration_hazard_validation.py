@@ -2,14 +2,10 @@
 validation/duration_hazard_validation.py
 ===========================================
 对应方法论文档 §3.4「HMM与HSMM」、§3.5「久期建模、hazard函数与预期剩余久期」。
-
-这是组件级正确性/行为验证脚本，不是实际执行链路的一部分——只验证
-engine/duration.py 里的久期分布/hazard函数对不对。真正的数据处理与
-策略回测链路在 ablation/（01_data_loading.py 开始）。
+这是组件级正确性/行为验证脚本，不是实际执行链路的一部分。
 
 真实数据没有上帝视角的区制标签，本脚本从 engine/regime_labeling 产出的
-ref_regime（离线全样本HMM给出的**参照标签，不是真值**，详见该模块
-docstring）里提取每个参照区制的历史段长样本。
+ref_regime里提取每个参照区制的历史段长样本。
 
 流程：
   1. 从 ablation/02_feature_engineering.py 生成的特征数据中，按 ref_regime
@@ -99,7 +95,7 @@ if __name__ == "__main__":
     features = pd.read_csv(DATA_DIR / "features.csv", parse_dates=["date"]).dropna(subset=["ref_regime"])
     seg_stats = extract_segment_durations_from_labels(features["ref_regime"])
 
-    print("=== 各自动标注参照区制历史段长样本概览（非真值，见 engine/regime_labeling.py）===")
+    print("=== 各自动标注参照区制历史段长样本概览===")
     print(seg_stats.groupby("regime")["duration"].agg(["count", "mean", "std", "min", "max"]).round(1))
     print()
 

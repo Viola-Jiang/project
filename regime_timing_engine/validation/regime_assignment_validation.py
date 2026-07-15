@@ -2,17 +2,14 @@
 validation/regime_assignment_validation.py
 ==================================
 对应方法论文档 §3.6「区制识别与软分配」。这是组件级正确性/行为验证脚本，
-不是实际执行链路的一部分——真正的数据处理与策略回测链路在 ablation/
-（01_data_loading.py 开始）。
+不是实际执行链路的一部分。
 
 真实数据没有上帝视角的区制标签，本脚本用 engine/regime_labeling 产出的
-ref_regime/ref_regime_age（离线全样本HMM给出的**参照标签，不是真值**，
-详见该模块docstring）替代原先合成数据自带的真实标签。"监督原型"这一步
+ref_regime/ref_regime_age替代原先合成数据自带的真实标签。"监督原型"这一步
 现在准确的说法是"基于自动标注参照拟合的原型"——它仍然是一个诊断上限
 参照（因为用了全样本离线信息），但不再是oracle真值上限。
 
-核心目标：验证"区制身份识别"能否修复 bocpd_validation 阶段暴露的问题——
-  用汇总(不分区制)的泛化hazard时，BOCPD在99.4%的时间里都跟踪失败。
+核心目标：验证"区制身份识别"能否修复 bocpd_validation 阶段暴露的问题。
 
 流程：
   1. 用自动标注参照标签拟合"参照版"区制原型（离线上限参照，非oracle真值）。
@@ -59,8 +56,7 @@ def fit_reference_prototypes(df: pd.DataFrame, seg_stats: pd.DataFrame, regimes:
     """
     用自动标注参照标签（ref_regime）直接计算每个区制在特征空间[z, log_sigma]
     中的中心（与协方差，供 RegimeSoftAssigner 的马氏/Wasserstein距离用）。
-    这是一个离线全样本上限参照，不是oracle真值上限——真值在真实数据上
-    根本不存在。
+    这是一个离线全样本上限参照，不是真值上限。
     """
     prototypes = []
     for regime in regimes:
@@ -79,8 +75,7 @@ def fit_reference_prototypes(df: pd.DataFrame, seg_stats: pd.DataFrame, regimes:
 def fit_unsupervised_prototypes_and_check_identifiability(df: pd.DataFrame, regimes: list):
     """
     无监督KMeans聚类识别性检验：不用ref_regime参与聚类本身，单纯用特征聚类
-    看能否分离出接近自动标注参照区制的簇（对照对象是ref_regime参照标签，
-    不是oracle真值）。
+    看能否分离出接近自动标注参照区制的簇。
     """
     from sklearn.cluster import KMeans
     from scipy.optimize import linear_sum_assignment

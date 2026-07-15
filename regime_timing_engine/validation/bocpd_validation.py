@@ -3,8 +3,7 @@ validation/bocpd_validation.py
 =================================
 本阶段把 emission_validation（共轭发射）与 duration_hazard_validation（久期
 ->hazard）缝合成完整的在线变点检测器，对应文档 §3.2 + §5.2 的在线推理流程。
-这是组件级正确性/行为验证脚本，不是实际执行链路的一部分——真正的数据处理
-与策略回测链路在 ablation/（01_data_loading.py 开始）。
+这是组件级正确性/行为验证脚本，不是实际执行链路的一部分。
 
 局限说明（重要）：
   本引擎目前尚不知道"当前处于哪个区制"（区制软分配是
@@ -13,8 +12,7 @@ validation/bocpd_validation.py
   regime_assignment_validation.py 会替换为"按区制混合"的 hazard。
 
 真实数据没有上帝视角的区制标签，本脚本用 engine/regime_labeling 产出的
-ref_regime/ref_regime_age（离线全样本HMM给出的**参照标签，不是真值**，
-详见该模块docstring）作为评估检测滞后时的参照变点位置。
+ref_regime/ref_regime_age作为评估检测滞后时的参照变点位置。
 
 验证内容：
   A. 数值正确性：每一步 run-length 后验必须归一化（求和=1）。

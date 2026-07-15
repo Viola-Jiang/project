@@ -14,7 +14,7 @@ ablation
   lookahead_contrast.py / leverage_contrast.py —— §6.4/仓位边界对照实验
   backtest_report.py         —— §6.1-6.4 汇总报告
 
-与 validation/ 的关系（不要混为一谈）：
+与 validation/ 的关系：
   validation/ —— 验证 engine/ 里每个理论组件本身对不对（数值正确性、公式对
                  不对），是"组件级正确性/行为验证"，不是实际执行链路的一
                  部分，跟采用哪种策略配置无关。哪怕消融实验换了十种参数

@@ -23,6 +23,12 @@ K_REGIMES = 3            # 区制数
 # 季度重估的新旧参数平滑权重（新版本占比），缓解直接切换到新估参数造成的仓位/区制判定跳变。
 BLEND_NEW_WEIGHT = 0.7
 
+# S5（多时间窗稳健性 + 统计去伪）暂时先不做（见 ablation/s5_multi_seed_robustness.py
+# 顶部说明）。这里统一开关：其余汇总脚本（run_ablation_summary.py、
+# backtest_report.py）据此跳过S5相关计算，不强制要求先跑一遍S5。
+# 之后要恢复S5，把这里改回 True 即可，不需要动汇总脚本。
+RUN_S5 = False
+
 
 def load_data() -> pd.DataFrame:
     """统一数据读取"""
