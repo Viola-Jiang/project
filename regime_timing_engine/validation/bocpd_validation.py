@@ -170,14 +170,15 @@ def make_diagnostic_plot(out_df: pd.DataFrame, save_path: Path):
     for idx in ref_cp_idx:
         axes[1].axvline(out_df["date"].iloc[idx], color="red", alpha=0.3, lw=0.8, ls="--")
     axes[1].axhline(0.5, color="gray", ls=":", lw=1)
-    axes[1].set_ylabel("P(r_t<=5)")
-    axes[1].set_title("变点检测信号 P(r_t<=5)（红色虚线=自动标注参照变点）")
+    axes[1].set_ylabel("P(r_t<=3)")
+    axes[1].set_title("变点检测信号 P(r_t<=3)（红色虚线=自动标注参照变点）")
 
     window = slice(0, 600)
     axes[2].plot(out_df["date"].iloc[window], out_df["ref_regime_age"].iloc[window],
                  color="black", lw=1.2, label="自动标注参照段龄")
     axes[2].plot(out_df["date"].iloc[window], out_df["map_run_length_adaptive"].iloc[window],
                  color="#3f6fa8", lw=1, label="BOCPD估计(MAP)")
+    axes[2].set_xlim(out_df["date"].iloc[window].min(), out_df["date"].iloc[window].max())
     axes[2].set_ylabel("段龄（天）")
     axes[2].set_xlabel("日期")
     axes[2].set_title("前600天细节放大")

@@ -205,6 +205,7 @@ def make_diagnostic_plot(result_df: pd.DataFrame, bocpd_prev_path: Path, save_pa
                      color="#3f6fa8", lw=1, label="regime_assignment(区制混合hazard)")
         axes[2].plot(prev["date"].iloc[window], prev["map_run_length_adaptive"].iloc[window],
                      color="gray", lw=0.8, ls="--", alpha=0.7, label="bocpd_validation(泛化hazard)")
+        axes[2].set_xlim(result_df["date"].iloc[window].min(), result_df["date"].iloc[window].max())
         axes[2].set_ylabel("段龄（天）")
         axes[2].set_xlabel("日期")
         axes[2].set_title("前600天：MAP段龄对比，regime_assignment vs bocpd_validation")
