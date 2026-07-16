@@ -37,22 +37,36 @@ from hmmlearn.hmm import GaussianHMM
 from .decision import calibrate_target_exposures
 
 
-def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5):
+def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5,
+            feature_mode: str = "z_vol"):
     """
-    用 [z, log(realized_vol)] 两维特征、EM 估参拟合 GaussianHMM。
+    EM 估参拟合 GaussianHMM。
     df 允许是整段历史（含"未来"），这是 S1/§6.4 故意要展示的前视行为。
+
+    feature_mode: "z_vol"（默认）用 [z, log(realized_vol)] 两维特征，是 S1/
+                  regime_labeling/lookahead_contrast 原有的设定；"z_only" 只用
+                  一维 z，与主链路（emission/BOCPD）的发射观测口径对齐，供
+                  feature_dim_contrast.py 隔离"特征维度不同"这一个变量用
+                  （S1比主链路多看了log(realized_vol)这一维，S1 vs S2 的
+                  落差里混杂了前视和特征维度两个变量，此前没有实验单独
+                  隔离过后者）。
 
     GaussianHMM 的 EM 对随机初始化敏感：单一种子有一定概率收敛到明显更差的
     局部最优（某状态自转移概率退化到接近0，导致状态逐日翻转、没有诊断价值）。
     这对 S1 尤其致命：S1 的角色是"允许前视的信息上限参照"，若这里恰好收敛到差的局部最优，
     S1 可能反而跑不赢因果版本，S1 vs S2 的"前视偏差"量化就失去意义。
     用 n_restarts 个不同种子各拟合一次，按对数似然 model.score(feat) 取最优，
-    避免因初始化不走运而产出一份质量很差的模型（同一机制也被 engine/regime_labeling.py 
+    避免因初始化不走运而产出一份质量很差的模型（同一机制也被 engine/regime_labeling.py
     的自动标注复用）。
 
     返回: (拟合好的模型, 特征矩阵)
     """
-    feat = np.column_stack([df["z"].values, np.log(df["realized_vol"].values)])
+    if feature_mode == "z_vol":
+        feat = np.column_stack([df["z"].values, np.log(df["realized_vol"].values)])
+    elif feature_mode == "z_only":
+        feat = df["z"].values.reshape(-1, 1)
+    else:
+        raise ValueError(f"未知 feature_mode: {feature_mode}，必须是 'z_vol' 或 'z_only'")
     best_model, best_score = None, -np.inf
     for i in range(n_restarts):
         model = GaussianHMM(n_components=k, covariance_type="full", n_iter=200, random_state=seed + i)

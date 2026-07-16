@@ -5,7 +5,7 @@ run_all.py — 一键运行全部流程
   阶段1: 01_data_loading          → data/prices.csv
   阶段2: 02_feature_engineering   → data/features.csv
   阶段3: validation（4个，emission → duration_hazard → bocpd → regime_assignment）
-  阶段4: ablation（s0 → s1 → s2 → s3 → s4 → lookahead → leverage → backtest_report → summary）
+  阶段4: ablation（s0 → s1 → s2 → s3 → s4 → lookahead → feature_dim → leverage → backtest_report → summary）
 
 """
 
@@ -28,9 +28,12 @@ STEPS = [
     # 所以不再单独跑独立脚本（重复跑浪费时间）。如需单独调试某个方案，
     # 可以在 PyCharm 里直接打开该脚本 Run。
     ("阶段3: 前视偏差对照",   "ablation/lookahead_contrast.py",       False),
+    ("阶段3: 特征维度对照",   "ablation/feature_dim_contrast.py",     False),
     ("阶段3: 杠杆对照",       "ablation/leverage_contrast.py",        False),
-    ("阶段3: 回测报告",       "ablation/backtest_report.py",          False),
+    # 消融汇总放在回测报告之前：它会把S0~S4各级明细存成csv（含s4_hsmm_duration.csv），
+    # backtest_report.py的§6.2会优先读这份缓存，不重新跑一遍S4（省时间，见其内部注释）。
     ("阶段3: 消融汇总(S0-S4)", "ablation/run_ablation_summary.py",    False),
+    ("阶段3: 回测报告",       "ablation/backtest_report.py",          False),
 ]
 
 

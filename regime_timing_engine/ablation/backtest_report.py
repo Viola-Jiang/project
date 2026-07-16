@@ -11,9 +11,11 @@ ablation/backtest_report.py
 
 §6.2 评估口径（年化收益/夏普/Calmar/最大回撤/换手率/调仓频次分布/
      分区制绩效/检测滞后）
-  —— 以 S4（终版核心）为例，完整跑一遍 compute_backtest_metrics，并且
+  —— 以 S4（终版核心）为例，跑一遍 compute_backtest_metrics，并且
      单独画出"调仓间隔天数分布"直方图——这是之前只存了数组、没有可视化
-     验证"非定频"的缺口，本脚本补上。
+     验证"非定频"的缺口，本脚本补上。若 outputs/ablation/results/
+     下已有 run_ablation_summary.py 存的 s4_hsmm_duration.csv，直接读取
+     复用，不重新跑一遍S4的causal walk-forward（省时间）。
 
 §6.3 统计去伪（Deflated Sharpe Ratio; BH-FDR）
   —— 汇总 ablation/s5_multi_seed_robustness.py 的结果。
@@ -23,8 +25,10 @@ ablation/backtest_report.py
 
 运行方式：
   python ablation/backtest_report.py
-  (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py；若
-   outputs/ablation/results/ 下还没有 lookahead_contrast.csv，本脚本会自动
+  (需先运行 ablation/01_data_loading.py, 02_feature_engineering.py。
+   建议在 ablation/run_ablation_summary.py 之后运行，这样§6.2能直接复用
+   它存的 s4_hsmm_duration.csv，不重新跑一遍S4；若没有则本脚本会自跑一遍。
+   若 outputs/ablation/results/ 下还没有 lookahead_contrast.csv，本脚本会自动
    现跑一遍。§6.1/§6.3 依赖 s5_multi_seed_robustness.csv，受
    ablation.common.RUN_S5 开关控制，RUN_S5=False（当前默认）时直接跳过，
    不要求S5已经跑过、也不会现跑)
@@ -75,7 +79,13 @@ def section_6_2(df: pd.DataFrame):
     print("=" * 78)
     print("§6.2 评估口径（以S4终版核心模型为例）")
     print("=" * 78)
-    result_df = generate_positions_s4(df)
+    s4_path = RESULTS_DIR / "s4_hsmm_duration.csv"
+    if s4_path.exists():
+        print(f"读取已有S4结果 -> {s4_path}（与run_ablation_summary.py共用，不重复跑一遍S4）")
+        result_df = pd.read_csv(s4_path, parse_dates=["date"])
+    else:
+        print("未找到S4结果，现跑一遍...")
+        result_df = generate_positions_s4(df)
     metrics = compute_backtest_metrics(result_df["log_return"], result_df["w_held"],
                                         regime_labels=result_df["ref_regime"])
     print_metrics("S4终版核心", metrics)
