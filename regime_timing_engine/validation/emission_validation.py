@@ -135,6 +135,48 @@ def test_within_segment_convergence_and_changepoint_sensitivity():
     return trace_df
 
 
+def test_within_segment_convergence_universality(min_length: int = 30,
+                                                   checkpoints=(5, 10, 20, 30)):
+    """
+    验证①（普遍性）：单个样例（B）不能说明收敛的普遍性。这里对全部长度
+    >= min_length 天的自动标注参照段各自独立重跑一遍发射递归，在固定段龄
+    检查点上记录"后验预测均值/尺度 与 该段真实均值/标准差"的绝对误差，
+    across 全部段取平均。预期：段龄越大，平均绝对误差越小。
+    """
+    df = load_features()
+    seg_id = (df["ref_regime_age"] == 1).cumsum()
+    segments = [seg for _, seg in df.groupby(seg_id) if len(seg) >= min_length]
+
+    mu_err = {c: [] for c in checkpoints}
+    scale_err = {c: [] for c in checkpoints}
+    for seg in segments:
+        z_vals = seg["z"].values
+        ref_mu, ref_sigma = z_vals.mean(), z_vals.std()
+        emission = NIGConjugateEmission(mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
+        trace = []
+        for z_t in z_vals:
+            pred_mu, pred_scale = emission.posterior_mean_scale(-1)
+            trace.append((pred_mu, pred_scale))
+            emission.update(z_t)
+        for c in checkpoints:
+            if len(trace) >= c:
+                pred_mu, pred_scale = trace[c - 1]
+                mu_err[c].append(abs(pred_mu - ref_mu))
+                scale_err[c].append(abs(pred_scale - ref_sigma))
+
+    rows = [{"age": c, "mu_abs_err": float(np.mean(mu_err[c])),
+             "scale_abs_err": float(np.mean(scale_err[c]))} for c in checkpoints]
+    conv_df = pd.DataFrame(rows)
+
+    print(f"=== B2. 段内收敛普遍性：全部长度>={min_length}天的自动标注参照段（{len(segments)}段）===")
+    print("在固定段龄检查点上，估计与该段真实均值/标准差的平均绝对误差：")
+    print(conv_df.rename(columns={"age": "段龄", "mu_abs_err": "估计均值的平均绝对误差",
+                                   "scale_abs_err": "估计尺度的平均绝对误差"})
+          .round(3).to_string(index=False))
+    print("（段龄越大误差越小，说明段内收敛具有普遍性，不只在个别段成立）\n")
+    return conv_df
+
+
 def test_all_transitions_likelihood_drop(min_length: int = 30):
     df = load_features()
     seg_id = (df["ref_regime_age"] == 1).cumsum()
@@ -221,10 +263,12 @@ def make_diagnostic_plot(trace_df, trans_df, save_path: Path):
 if __name__ == "__main__":
     test_incremental_matches_batch()
     trace_df = test_within_segment_convergence_and_changepoint_sensitivity()
+    convergence_df = test_within_segment_convergence_universality()
     transitions_df = test_all_transitions_likelihood_drop()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     trace_df.to_csv(RESULTS_DIR / "emission_convergence_trace.csv", index=False)
+    convergence_df.to_csv(RESULTS_DIR / "emission_convergence_by_age.csv", index=False)
     transitions_df.to_csv(RESULTS_DIR / "emission_transitions_drop.csv", index=False)
     print(f"\n结果已保存 -> {RESULTS_DIR}")
 

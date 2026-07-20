@@ -36,7 +36,7 @@ FIGURES_DIR = REPO_ROOT / "outputs" / "ablation" / "figures"
 sys.path.insert(0, str(REPO_ROOT))
 
 from engine.features import preprocess  # noqa: E402
-from engine.regime_labeling import auto_label_regimes  # noqa: E402
+from engine.zigzag_labeling import zigzag_label_regimes  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -91,12 +91,13 @@ if __name__ == "__main__":
     raw = pd.read_csv(DATA_DIR / "prices.csv", parse_dates=["date"])
     features = preprocess(raw)
 
-    # auto_label_regimes 内部要拟合HMM，不能吃NaN，所以只对warm-up期之后的
-    # 有效样本做自动标注，再按原始index对齐拼回去——warm-up期的
-    # ref_regime/ref_regime_age 保持NaN，与 log_return/realized_vol/z 的
-    # NaN 范围一致，不引入信息。
+    # zigzag_label_regimes 只需要价格，不受 z/realized_vol 的warm-up期限制；
+    # 但仍只对warm-up期之后的有效样本做标注、按原始index对齐拼回去，
+    # 保持 ref_regime/ref_regime_age 的NaN范围与 log_return/realized_vol/z
+    # 一致，维持与此前HMM版本一致的行为边界，不引入额外信息。
     valid_mask = features["z"].notna() & features["realized_vol"].notna()
-    labeled_valid = auto_label_regimes(features.loc[valid_mask].reset_index(drop=True))
+    input_df = features.loc[valid_mask].reset_index(drop=True).rename(columns={"price": "close"})
+    labeled_valid = zigzag_label_regimes(input_df)
     features["ref_regime"] = pd.NA
     features["ref_regime_age"] = pd.NA
     features.loc[valid_mask, "ref_regime"] = labeled_valid["ref_regime"].values

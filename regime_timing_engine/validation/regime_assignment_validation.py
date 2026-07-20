@@ -171,7 +171,10 @@ def evaluate(result_df: pd.DataFrame):
 
 def make_diagnostic_plot(result_df: pd.DataFrame, bocpd_prev_path: Path, save_path: Path):
     setup_cjk_font()
-    fig, axes = plt.subplots(3, 1, figsize=(14, 9), sharex=True)
+    # 注意：不能用 sharex=True——第三个面板要缩放到前600天（set_xlim），
+    # 若共享x轴该缩放会传导到上两个面板，导致本应展示全样本的上两图也被裁到前600天。
+    fig, axes = plt.subplots(3, 1, figsize=(14, 9), sharex=False)
+    axes[1].sharex(axes[0])  # 仅让上两个全样本面板共享x轴，第三个（缩放图）保持独立
 
     seg_id = (result_df["ref_regime_age"] == 1).cumsum()
     for _, seg in result_df.groupby(seg_id):

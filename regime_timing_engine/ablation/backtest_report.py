@@ -54,20 +54,35 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 
 def make_rebalance_histogram(gap_days: np.ndarray, save_path: Path):
-    """§6.2『调仓频次分布，验证"非定频"』的可视化。"""
+    """§6.2『调仓频次分布，验证"非定频"』的可视化。
+
+    绝大多数调仓间隔集中在几天以内，但存在少数极长间隔（暖机期、长期无调仓
+    的低波动段），若按 1..max_gap 逐天分箱，x 轴会被极长间隔拉到数百天、导致
+    主体柱子几乎不可见。因此把展示上限截断到 95 分位（至少覆盖到10天），超过
+    上限的间隔并入最右侧一个"≥cap"溢出箱，并在标题里注明溢出次数。"""
     setup_cjk_font()
     fig, ax = plt.subplots(figsize=(8, 5))
     if len(gap_days) == 0:
         ax.text(0.5, 0.5, "无足够调仓样本", ha="center", va="center")
+        ax.set_title("调仓间隔分布（验证'非定频'，无足够样本）")
     else:
-        max_gap = int(gap_days.max())
-        ax.hist(gap_days, bins=range(1, max_gap + 2), color="#3f6fa8", edgecolor="white")
-        ax.axvline(float(np.median(gap_days)), color="red", ls="--", lw=1,
-                   label=f"中位数={np.median(gap_days):.0f}天")
+        gap = np.asarray(gap_days, dtype=float)
+        cap = max(int(np.ceil(np.percentile(gap, 95))), 10)
+        n_over = int((gap > cap).sum())
+        clipped = np.minimum(gap, cap)  # 超过 cap 的并入 cap 这一档
+        bins = np.arange(0.5, cap + 1.5, 1.0)  # 每天一个箱，柱心落在整数上
+        ax.hist(clipped, bins=bins, color="#3f6fa8", edgecolor="white")
+        med = float(np.median(gap))
+        ax.axvline(med, color="red", ls="--", lw=1, label=f"中位数={med:.0f}天")
+        ax.set_xlim(0.5, cap + 0.5)
+        if n_over > 0:
+            ax.set_xticks(list(range(1, cap + 1)))
+            ax.set_xticklabels([str(t) for t in range(1, cap)] + [f"≥{cap}"])
         ax.legend(fontsize=9)
+        over_note = f"；其中 {n_over} 次间隔 ≥{cap}天，已并入最右档" if n_over > 0 else ""
+        ax.set_title(f"调仓间隔分布（验证'非定频'，共{len(gap_days)}次间隔观测{over_note}）")
     ax.set_xlabel("相邻两次调仓之间的间隔天数")
     ax.set_ylabel("频次")
-    ax.set_title(f"调仓间隔分布（验证'非定频'，共{len(gap_days)}次间隔观测）")
     plt.tight_layout()
     save_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(save_path, dpi=130)
