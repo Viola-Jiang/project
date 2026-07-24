@@ -29,8 +29,9 @@ engine/regime.py
 
 核心组件：
   name_clusters_by_return_rank —— 按历史平均收益排名给聚类/状态命名，
-    K=3 时统一命名为 bull/sideways/bear。engine/regime_labeling.py（HMM自动标注）
-    与 engine/calibration.py（KMeans因果估参）共用这一份命名实现，避免两处不一致。
+    K=3 时统一命名为 bull/sideways/bear。engine/calibration.py（S2~S4的
+    KMeans因果估参）实际生产使用；ablation/diag_s1_interpretability.py
+    诊断脚本也复用它给S1的HMM状态命名，避免各处各写一份导致命名口径不一致。
   RegimePrototype  —— 单个区制的（特征均值、协方差、久期分布、目标暴露）
   RegimeSoftAssigner —— 给定当前特征描述子，支持两种可插拔的距离度量做softmax 软分配：
       "mahalanobis"：用样本量加权的pooled协方差的逆，是马氏距离的标准定义。

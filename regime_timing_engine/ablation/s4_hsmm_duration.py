@@ -22,19 +22,23 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
 from ablation.common import (  # noqa: E402
-    load_data, RESULTS_DIR, FIGURES_DIR, MIN_HISTORY, REESTIMATE_EVERY, PRIOR_LOOKBACK, K_REGIMES,
-    BLEND_NEW_WEIGHT, blend_prior,
+    load_data, RESULTS_DIR, FIGURES_DIR, MIN_HISTORY, REESTIMATE_EVERY, PRIOR_LOOKBACK,
+    K_REGIMES_MULTIAXIS, BLEND_NEW_WEIGHT, TREND_VOL_WINDOW, EXTREMITY_M, EXTREMITY_LOOKBACK,
+    VOL_LOOKBACK, blend_prior,
 )
 from engine.bocpd import BOCPD  # noqa: E402
 from engine.emission import fit_nig_prior_from_moments  # noqa: E402
-from engine.calibration import estimate_regime_params_causal, blend_assigners  # noqa: E402
+from engine.calibration import (  # noqa: E402
+    estimate_regime_params_multiaxis, blend_assigners, rolling_trend_vol_features,
+    compute_t_stat, compute_extremity_percentile, compute_rolling_percentile,
+)
 from engine.decision import duration_discount, apply_uncertainty_shrinkage, RebalanceEngine  # noqa: E402
 from engine.evaluation import compute_backtest_metrics, print_metrics, detection_lag_stats  # noqa: E402
 from engine.plotting import setup_cjk_font, REGIME_COLORS  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
 
-def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
+def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES_MULTIAXIS,
                         lam_uncertainty: float = 0.5, duration_floor: float = 0.3,
                         rebalance_delta: float = 0.08, cp_threshold: float = 0.5,
                         position_bounds: tuple = (0.0, 1.0)) -> pd.DataFrame:
@@ -47,6 +51,11 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
     neutral = (lo + hi) / 2.0
     bocpd = BOCPD(hazard_fn=lambda r: 0.01, mu0=0.0, kappa0=1.0, alpha0=1.0, beta0=1.0)
     rebalancer = RebalanceEngine(delta=rebalance_delta, changepoint_threshold=cp_threshold)
+    log_returns = df["log_return"].values
+    trend_arr, vol_arr = rolling_trend_vol_features(log_returns, window=TREND_VOL_WINDOW)
+    t_stat_arr = compute_t_stat(trend_arr, vol_arr, TREND_VOL_WINDOW)
+    extremity_arr = compute_extremity_percentile(log_returns, m=EXTREMITY_M, lookback=EXTREMITY_LOOKBACK)
+    vol_level_arr = compute_rolling_percentile(df["realized_vol"].values, VOL_LOOKBACK)
     assigner = None
     prior = None
     records = []
@@ -63,9 +72,10 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
             except ValueError:
                 pass
             try:
-                # 重估区制原型（KMeans + 久期拟合）
-                new_assigner, _ = estimate_regime_params_causal(
-                    hist, k=k_regimes, duration_family="negbinom", position_bounds=position_bounds)
+                # 重估区制原型：[t_stat, extremity, vol_level]三维KMeans + 久期拟合
+                new_assigner, _ = estimate_regime_params_multiaxis(
+                    hist, k=k_regimes, duration_family="negbinom", position_bounds=position_bounds,
+                    prev_assigner=assigner)
                 assigner = blend_assigners(new_assigner, assigner, duration_family="negbinom",
                                            new_weight=BLEND_NEW_WEIGHT)
             except ValueError:
@@ -82,19 +92,16 @@ def generate_positions(df: pd.DataFrame, k_regimes: int = K_REGIMES,
         z_t = row["z"]
         regime_names = assigner.names
 
-        # 构造今天hazard只能用step前的信息
-        posterior_prev = np.exp(bocpd.log_run_length_posterior)
-        mu_hat_prev, sigma_hat_prev = bocpd.emission.posterior_weighted_mean_scale(posterior_prev)
-        regime_probs_prev = assigner.assign(np.array([mu_hat_prev, sigma_hat_prev]))
+        # 区制识别特征改用独立于BOCPD计算的[t_stat, extremity, vol_level]三维特征，
+        # 理由同S2/S3；同一天内特征不变，hazard混合前后查询用同一个值。
+        feat_t = np.array([t_stat_arr[i], extremity_arr[i], vol_level_arr[i]])
+        regime_probs_prev = assigner.assign(feat_t)
 
         run_lengths = np.arange(bocpd.n_hypotheses)
         h_mix = assigner.mixture_hazard(regime_probs_prev, run_lengths)
         result = bocpd.step(z_t, hazards_override=h_mix)
 
-        # step()跑完后用最新后验重新算一次区制概率，用于今天的仓位决策/记录
-        posterior_now = np.exp(bocpd.log_run_length_posterior)
-        mu_hat_now, sigma_hat_now = bocpd.emission.posterior_weighted_mean_scale(posterior_now)
-        regime_probs = assigner.assign(np.array([mu_hat_now, sigma_hat_now]))
+        regime_probs = regime_probs_prev
         map_regime = regime_names[int(np.argmax(regime_probs))]
 
         proto_by_name = {p.name: p for p in assigner.prototypes}

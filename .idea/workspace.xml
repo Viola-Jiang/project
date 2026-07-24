@@ -5,40 +5,42 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0448c732-49b7-4dad-ba76-872b68c984e0" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/data/features.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/data/prices.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/01_data_loading.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/02_feature_engineering.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/leverage_contrast.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/lookahead_contrast.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/rebalance_frequency_distribution.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s0_baseline.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s1_offline_hmm.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s2_causal_bocpd_map.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s3_full_posterior_band.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s4_hsmm_duration.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s5_multi_seed_robustness.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/ablation_summary.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/leverage_contrast.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/lookahead_contrast.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_constant.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s0_baseline_ma.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s1_offline_hmm.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s2_causal_bocpd_map.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s3_full_posterior_band.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s4_hsmm_duration.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s5_multi_seed_robustness.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/figures/bocpd_validation.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/figures/duration_hazard_validation.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/figures/emission_validation.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/figures/regime_assignment_validation.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/results/bocpd_results.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/results/emission_convergence_trace.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/results/emission_transitions_drop.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/results/hazard_curves.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/results/regime_assignment_results.csv" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/results/segment_durations.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/02_feature_engineering.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/02_feature_engineering.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/common.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/common.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/feature_dim_contrast.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/feature_dim_contrast.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/s1_offline_hmm.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/s1_offline_hmm.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/s2_causal_bocpd_map.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/s2_causal_bocpd_map.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/s3_full_posterior_band.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/s3_full_posterior_band.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/ablation/s4_hsmm_duration.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/ablation/s4_hsmm_duration.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/calibration.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/calibration.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/duration.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/duration.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/features.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/features.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/hmm_offline.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/hmm_offline.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/regime.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/regime.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/regime_labeling.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/regime_labeling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/engine/zigzag_labeling.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/engine/zigzag_labeling.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/01_data_loading.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/01_data_loading.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/leverage_contrast.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/leverage_contrast.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/lookahead_contrast.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/lookahead_contrast.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/rebalance_frequency_distribution.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/rebalance_frequency_distribution.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s1_offline_hmm.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s1_offline_hmm.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s2_causal_bocpd_map.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s2_causal_bocpd_map.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s3_full_posterior_band.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s3_full_posterior_band.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s4_hsmm_duration.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/figures/s4_hsmm_duration.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/ablation_summary.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/ablation_summary.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/backtest_report_section62_metrics.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/backtest_report_section62_metrics.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/leverage_contrast.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/leverage_contrast.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s1_offline_hmm.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s1_offline_hmm.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s2_causal_bocpd_map.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s2_causal_bocpd_map.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s3_full_posterior_band.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s3_full_posterior_band.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s4_hsmm_duration.csv" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/ablation/results/s4_hsmm_duration.csv" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/figures/zigzag_label_selfcheck.png" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/outputs/validation/figures/zigzag_label_selfcheck.png" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/run_all.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/run_all.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/validation/bocpd_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/validation/bocpd_validation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/validation/duration_hazard_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/validation/duration_hazard_validation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/validation/emission_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/validation/emission_validation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/regime_timing_engine/validation/regime_assignment_validation.py" beforeDir="false" afterPath="$PROJECT_DIR$/regime_timing_engine/validation/regime_assignment_validation.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -51,10 +53,10 @@
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 6
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 6
+}</component>
   <component name="ProjectId" id="3GD3gBInBF7RdKjXh4fiORClCn2" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -63,7 +65,9 @@
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
     "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "Python.run_all.executor": "Run",
     "Python.s0_baseline.executor": "Run",
+    "Python.zigzag_labeling.executor": "Run",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"

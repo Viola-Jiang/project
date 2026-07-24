@@ -22,8 +22,8 @@ engine/duration.py
 离线估参辅助函数（§5.1「离线估参」中的"久期分布"）：
   extract_segment_durations_from_labels —— 给定任意标签序列，按连续段切出
                                             久期样本（真实数据没有oracle标签，
-                                            这里喂入的是 engine.regime_labeling
-                                            产出的自动标注参照标签，或模型自己
+                                            这里喂入的是 engine.zigzag_labeling
+                                            产出的规则式参照标签，或模型自己
                                             在线聚类得到的标签）
   fit_regime_duration_models            —— 对指定区制分别拟合 NegBinom（HSMM用）
                                             与 Geometric（HMM隐含假设，仅作对照）
@@ -162,7 +162,7 @@ def fit_geometric_duration(mean: float, d_min: int = 1,
 def extract_segment_durations_from_labels(labels) -> pd.DataFrame:
     """
     通用版本：给定任意一串类别标签，按值发生变化的位置切分连续段，返回每段
-    的标签与久期。喂入的标签可以是 engine.regime_labeling 产出的自动标注
+    的标签与久期。喂入的标签可以是 engine.zigzag_labeling 产出的规则式
     参照标签（离线诊断，见 validation/duration_hazard_validation.py、
     regime_assignment_validation.py），也可以是「§5.1 因果 walk-forward
     估参」里模型自己对历史的聚类结果（见 engine/calibration.py）——两处场景

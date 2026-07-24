@@ -11,9 +11,13 @@ ablation/02_feature_engineering.py
   3. 波动归一化收益 z_t = r_t / sigma_t   <- BOCPD 的实际"发射观测"
 
 真实数据没有上帝视角的区制标签，本脚本额外调用
-engine/regime_labeling.auto_label_regimes 产出 ref_regime/ref_regime_age
-两列——这是离线全样本HMM给出的**参照标签，不是真值**，只供 validation/
-与 ablation/ 的诊断/评估使用（详见该模块 docstring 的边界说明）。
+engine/zigzag_labeling.zigzag_label_regimes 产出 ref_regime/ref_regime_age
+两列——这是规则式（Zig-Zag转折点+Binseg趋势衰竭修正，允许全样本前视）
+给出的**参照标签，不是真值**，只供 validation/ 与 ablation/ 的诊断/评估
+使用（详见该模块 docstring 的边界说明）。此前曾用离线全样本HMM
+（`engine.regime_labeling.auto_label_regimes`）产出这两列，诊断发现
+HMM版标签几乎只按波动率分档、不含涨跌方向，已换成规则式版本，
+HMM版函数因此没有调用方，已删除。
 
 运行方式：
   python ablation/02_feature_engineering.py   (需先运行 01_data_loading.py)

@@ -35,21 +35,52 @@ from scipy.stats import multivariate_normal
 from hmmlearn.hmm import GaussianHMM
 
 from .decision import calibrate_target_exposures
+from .features import (
+    rolling_trend_vol_features, gate_trend_by_significance, classify_high_vol,
+    compute_t_stat, compute_extremity_percentile, compute_rolling_percentile,
+)
 
 
 def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5,
-            feature_mode: str = "z_vol"):
+            feature_mode: str = "z_vol", trend_vol_window: int = 21,
+            gate_threshold: float | None = 1.5,
+            extremity_m: int = 60, extremity_lookback: int = 500, vol_lookback: int = 500):
     """
     EM 估参拟合 GaussianHMM。
     df 允许是整段历史（含"未来"），这是 S1/§6.4 故意要展示的前视行为。
 
-    feature_mode: "z_vol"（默认）用 [z, log(realized_vol)] 两维特征，是 S1/
-                  regime_labeling/lookahead_contrast 原有的设定；"z_only" 只用
-                  一维 z，与主链路（emission/BOCPD）的发射观测口径对齐，供
-                  feature_dim_contrast.py 隔离"特征维度不同"这一个变量用
-                  （S1比主链路多看了log(realized_vol)这一维，S1 vs S2 的
-                  落差里混杂了前视和特征维度两个变量，此前没有实验单独
-                  隔离过后者）。
+    feature_mode:
+      "z_vol"（默认）用 [z, log(realized_vol)] 两维特征，是 S1/
+                  regime_labeling/lookahead_contrast 原有的设定；
+      "z_only"    只用一维 z，与主链路（emission/BOCPD）的发射观测口径对齐，
+                  供 feature_dim_contrast.py 隔离"特征维度不同"这一个变量用；
+      "trend_vol" 用 [trend_W, vol_W]（因果滚动窗口的原始收益趋势/波动，
+                  见 engine.calibration.rolling_trend_vol_features）——
+                  诊断发现 [z, log_vol] 几乎不含方向信息（1.2区制识别.md），
+                  "z_vol"/"z_only" 都继承了这个缺陷；"trend_vol" 是给 HMM
+                  这个机制本身喂更好的观测，用于测"HMM若拿到含方向的特征、
+                  又允许看未来，上限有多高"，不是把HMM换成别的机制。
+      "multiaxis" 用 [t_stat, extremity, vol_level] 三维特征（与 S2~S4 现在
+                  的区制识别特征同源，见 engine.calibration.
+                  estimate_regime_params_multiaxis 与1.3文档第9~13点）——
+                  S2~S4已经从"trend_vol"迁移到这套三维特征，S1若继续用旧的
+                  "trend_vol"，S1 vs S2的落差就会混入"特征本身不同"这个额外
+                  变量，不再是干净的"前视 vs 因果"对照；换成同一套特征，才能让
+                  S1重新回到"给HMM这个机制同样的原材料、允许它看未来，上限
+                  能到多高"这个干净的问题上。
+    trend_vol_window: feature_mode="trend_vol"/"multiaxis" 时的滚动窗口天数，默认21。
+    gate_threshold: 仅"trend_vol"用，对 trend_W 做统计显著性闸门
+                  （engine.features.gate_trend_by_significance）的t统计量阈值，
+                  默认1.5——诊断发现不加闸门时，HMM会在高波动但方向不明确的
+                  时期（如2015年股灾+反弹+熔断）整段判定为同一个隐藏状态
+                  （被高波动主导，而非真实方向），导致最大回撤跟不做任何
+                  区分一样差；闸门把"趋势相对当期噪声是否统计显著"和"波动
+                  高低"分离开，避免两者被统计聚类混为一谈（1.2区制识别.md
+                  记录了网格搜索：1.5为验证效果最好的阈值）。传 None 关闭闸门
+                  （用于对照/调试）。"multiaxis"不需要这个闸门——t_stat本身
+                  就是"趋势相对噪声"的显著性统计量，已经内含这层归一化。
+    extremity_m/extremity_lookback/vol_lookback: 仅"multiaxis"用，透传给
+                  compute_extremity_percentile/compute_rolling_percentile。
 
     GaussianHMM 的 EM 对随机初始化敏感：单一种子有一定概率收敛到明显更差的
     局部最优（某状态自转移概率退化到接近0，导致状态逐日翻转、没有诊断价值）。
@@ -65,8 +96,30 @@ def fit_hmm(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5,
         feat = np.column_stack([df["z"].values, np.log(df["realized_vol"].values)])
     elif feature_mode == "z_only":
         feat = df["z"].values.reshape(-1, 1)
+    elif feature_mode == "trend_vol":
+        trend, vol = rolling_trend_vol_features(df["log_return"].values, window=trend_vol_window)
+        if gate_threshold is not None:
+            trend = gate_trend_by_significance(trend, vol, window=trend_vol_window, t_threshold=gate_threshold)
+        feat = np.column_stack([trend, vol])
+        # trend(~O(0.1))与vol(~O(0.01))尺度相差约一个数量级，GaussianHMM用
+        # covariance_type="full"对尺度差异敏感，EM迭代中容易让某状态的协方差
+        # 估计退化为病态矩阵；标准化到单位尺度只是数值处理，不改变特征本身
+        # 携带的信息（z_vol/z_only两支各维本身尺度接近，不受此问题影响，未改）。
+        feat = (feat - feat.mean(axis=0)) / feat.std(axis=0)
+    elif feature_mode == "multiaxis":
+        log_returns = df["log_return"].values
+        trend, vol = rolling_trend_vol_features(log_returns, window=trend_vol_window)
+        t_stat = compute_t_stat(trend, vol, trend_vol_window)
+        extremity = compute_extremity_percentile(log_returns, m=extremity_m, lookback=extremity_lookback)
+        vol_level = compute_rolling_percentile(df["realized_vol"].values, vol_lookback)
+        feat = np.column_stack([t_stat, extremity, vol_level])
+        # 三维量纲差异更大（t_stat~O(1~3) vs extremity/vol_level~O(0~100)），
+        # 标准化理由同"trend_vol"分支——对本次样本算一次标量mean/std，不是
+        # engine.calibration.estimate_regime_params_multiaxis里rolling_standardize
+        # 那种逐日滚动版，两者不是同一个东西，见1.3阶段性报告标注1。
+        feat = (feat - feat.mean(axis=0)) / feat.std(axis=0)
     else:
-        raise ValueError(f"未知 feature_mode: {feature_mode}，必须是 'z_vol' 或 'z_only'")
+        raise ValueError(f"未知 feature_mode: {feature_mode}，必须是 'z_vol'/'z_only'/'trend_vol'/'multiaxis'")
     best_model, best_score = None, -np.inf
     for i in range(n_restarts):
         model = GaussianHMM(n_components=k, covariance_type="full", n_iter=200, random_state=seed + i)
@@ -131,14 +184,78 @@ def calibrate_state_exposures(state_seq: np.ndarray, log_returns: np.ndarray, k:
     return state_stats
 
 
-def fit_offline_hmm_positions(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5):
+def calibrate_state_exposures_by_vol(state_seq: np.ndarray, log_returns: np.ndarray,
+                                      high_vol: np.ndarray, k: int) -> dict:
+    """
+    在 calibrate_state_exposures 基础上，把每个状态再按波动强度
+    （engine.features.classify_high_vol）切成高/低两档分别标定凯利仓位。
+
+    背景（1.2S1层级优化.md诊断）：K=3的HMM状态在"方向"上完全干净（bull/
+    bear 从不混上涨/下跌天），但状态内部混着"温和趋势"和"剧烈趋势"两种
+    波动强度不同的天，二者的凯利分数（mu/sigma^2）并不相同——用整个状态的
+    平均 mu/sigma 计算凯利，会把这个差异抹平。这里保持状态识别（HMM机制、
+    K、bull/sideways/bear 命名）完全不变，只是标定凯利仓位时改按
+    (状态, 波动档位) 这个更细的分组重新算 mu/sigma，让同一方向下"猛"和
+    "温"两种日子的仓位可以不同。
+
+    返回: {"state_{s}_{high|low}vol": {"mu":..., "sigma":..., "target_exposure":...}}
+    某个 (状态,档位) 组合样本量为0时会被跳过（不会出现在返回结果里）。
+    """
+    state_stats = {}
+    for s in range(k):
+        for is_high, tag in ((True, "high"), (False, "low")):
+            mask = (state_seq == s) & (high_vol == is_high)
+            if mask.sum() == 0:
+                continue
+            state_stats[f"state_{s}_{tag}vol"] = {
+                "mu": float(log_returns[mask].mean()),
+                "sigma": float(log_returns[mask].std()),
+            }
+    target_exposures = calibrate_target_exposures(state_stats)
+    for name in state_stats:
+        state_stats[name]["target_exposure"] = target_exposures[name]
+    return state_stats
+
+
+def fit_offline_hmm_positions(df: pd.DataFrame, k: int = 3, seed: int = 0, n_restarts: int = 5,
+                               feature_mode: str = "z_vol", trend_vol_window: int = 21,
+                               gate_threshold: float | None = 1.5,
+                               vol_split_window: int | None = 90,
+                               extremity_m: int = 60, extremity_lookback: int = 500,
+                               vol_lookback: int = 500):
     """
     S1 专用入口：拟合HMM + Viterbi(平滑)解码 + 按平滑状态标定暴露。
+    feature_mode/trend_vol_window/gate_threshold/extremity_*/vol_lookback 透传给
+    fit_hmm，见其文档。
+
+    vol_split_window: 标定凯利仓位时，把每个状态内部再按波动强度切两档
+      分别标定（见 calibrate_state_exposures_by_vol 文档），窗口长度传给
+      engine.features.classify_high_vol。传 None 关闭，退回按状态整体
+      标定的旧行为（calibrate_state_exposures）——feature_mode="multiaxis"时
+      vol_level已经是HMM观测的一个独立维度，不需要这个事后补丁，调用方应传None。
+
     返回: (w_target: 逐日目标仓位Series, state_stats)
+      state_stats 始终包含按状态整体统计的 "state_{s}" 键（供打印/对照）；
+      vol_split_window 不为 None 时另外附加 "state_{s}_{high|low}vol" 键，
+      w_target 按这套更细的标定生成。
     """
-    model, feat = fit_hmm(df, k=k, seed=seed, n_restarts=n_restarts)
+    model, feat = fit_hmm(df, k=k, seed=seed, n_restarts=n_restarts,
+                           feature_mode=feature_mode, trend_vol_window=trend_vol_window,
+                           gate_threshold=gate_threshold, extremity_m=extremity_m,
+                           extremity_lookback=extremity_lookback, vol_lookback=vol_lookback)
     state_seq = decode_smoothed(model, feat)
     state_stats = calibrate_state_exposures(state_seq, df["log_return"].values, k)
-    w_target = pd.Series([state_stats[f"state_{s}"]["target_exposure"] for s in state_seq],
+
+    if vol_split_window is None:
+        w_target = pd.Series([state_stats[f"state_{s}"]["target_exposure"] for s in state_seq],
+                              index=df.index, name="w_target")
+        return w_target, state_stats
+
+    _, vol = rolling_trend_vol_features(df["log_return"].values, window=trend_vol_window)
+    high_vol = classify_high_vol(vol, window=vol_split_window)
+    bucket_stats = calibrate_state_exposures_by_vol(state_seq, df["log_return"].values, high_vol, k)
+    bucket_names = [f"state_{s}_{'high' if hv else 'low'}vol" for s, hv in zip(state_seq, high_vol)]
+    w_target = pd.Series([bucket_stats[name]["target_exposure"] for name in bucket_names],
                           index=df.index, name="w_target")
+    state_stats.update(bucket_stats)
     return w_target, state_stats

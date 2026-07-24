@@ -15,7 +15,10 @@ engine
   evaluation     — 回测绩效指标（夏普、最大回撤、Deflated Sharpe、BH-FDR 等）
   hmm_offline    — 离线 HMM（前视上界参照），含 Viterbi 平滑与 forward 滤波两种解码
   features       — 原始数据预处理：对数收益 → z-score → 已实现波动率
-  regime_labeling — 基于 HMM 的真实区制自动标定（仅用于仿真/验证数据）
+  zigzag_labeling — 规则式参照标签（Zig-Zag+Binseg），生产实际使用，产出 ref_regime
+  regime_labeling — 仅剩 _merge_short_segments 通用短段合并工具（历史上的
+                    HMM自动标注 auto_label_regimes 已因无调用方被移除，
+                    ref_regime 现由 zigzag_labeling 产出）
   plotting       — 中文字体加载、区制背景着色等绘图辅助
 
 ────────────────────────────────────────────────────
@@ -82,6 +85,7 @@ from .evaluation import (
 # ---------- hmm_offline ----------
 from .hmm_offline import (
     calibrate_state_exposures,
+    calibrate_state_exposures_by_vol,
     decode_filtered,
     decode_smoothed,
     fit_hmm,
@@ -91,8 +95,8 @@ from .hmm_offline import (
 # ---------- features ----------
 from .features import preprocess
 
-# ---------- regime_labeling ----------
-from .regime_labeling import auto_label_regimes
+# ---------- zigzag_labeling ----------
+from .zigzag_labeling import zigzag_label_regimes
 
 # ---------- plotting ----------
 from .plotting import (
@@ -138,14 +142,15 @@ __all__ = [
     "purged_embargo_windows",
     # hmm_offline
     "calibrate_state_exposures",
+    "calibrate_state_exposures_by_vol",
     "decode_filtered",
     "decode_smoothed",
     "fit_hmm",
     "fit_offline_hmm_positions",
     # features
     "preprocess",
-    # regime_labeling
-    "auto_label_regimes",
+    # zigzag_labeling
+    "zigzag_label_regimes",
     # plotting
     "REGIME_COLORS",
     "setup_cjk_font",

@@ -68,6 +68,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
+from scipy.optimize import linear_sum_assignment
 
 from .bocpd import BOCPD
 from .duration import (
@@ -76,6 +77,11 @@ from .duration import (
 )
 from .regime import RegimePrototype, RegimeSoftAssigner, name_clusters_by_return_rank
 from .decision import calibrate_target_exposures
+from .zigzag_labeling import zigzag_label_regimes
+from .features import (  # noqa: F401  (对外重导出，S2~S4沿用旧导入路径)
+    rolling_trend_vol_features, compute_t_stat, compute_extremity_percentile,
+    compute_rolling_percentile, rolling_standardize,
+)
 
 
 def compute_posterior_descriptor_trajectory(z_series: np.ndarray, pooled_hazard: float = 0.01):
@@ -165,6 +171,238 @@ def estimate_regime_params_causal(hist_df: pd.DataFrame, k: int = 3, max_duratio
 
     # bandwidth=1.0 对应 GMM 的共享球形协方差 sigma=1.0*I。由于 feature_scale
     # 已将各维度缩放至单位标准差，标准化空间中距离约等于"偏离中心几个标准差"。
+    assigner = RegimeSoftAssigner(prototypes, feature_scale=feature_scale, bandwidth=1.0, metric=metric)
+    return assigner, regime_stats
+
+
+def estimate_regime_params_rule_based(hist_df: pd.DataFrame, max_duration: int = 2000,
+                                       duration_family: str = "negbinom",
+                                       position_bounds: tuple = (0.0, 1.0),
+                                       metric: str = "mahalanobis", window: int = 21,
+                                       zigzag_kwargs: dict | None = None):
+    """
+    §3.6"可由经济含义固定"这一支的具体实现，与 estimate_regime_params_causal
+    （"或由段级发射统计无监督聚类得到"这一支）互为替代，接口一致、可直接互换。
+
+    背景：诊断发现 estimate_regime_params_causal 的 KMeans 在 [mu_hat, sigma_hat]
+    上聚类严重退化——sigma_hat 几乎恒为1（z 被设计成方差归一，其尺度统计量
+    不携带区制信息），mu_hat 的真实方向信号又被 BOCPD 自身的 run-length 后验
+    加权平均磨平，导致聚类后 85.6% 的样本堆进同一个簇，退化为随机划分。
+
+    做法：不做无监督聚类去"发现"原型，改用 engine.zigzag_labeling.
+    zigzag_label_regimes（申万宏源趋势/震荡划分的规则式实现，已在 1.1 验证过
+    方向可解释）在 hist_df 上先标出 bull/sideways/bear 三段式历史，再以
+    rolling_trend_vol_features（因果滚动窗口的收益趋势与波动）在这三段各自
+    的均值/协方差作为区制原型中心——原型"发现"的方式从统计聚类换成规则标注，
+    其余（RegimeSoftAssigner 的距离-softmax软分配机制、久期拟合、目标暴露
+    标定、blend_assigners 新旧平滑）与 estimate_regime_params_causal 完全一致。
+
+    hist_df: 必须包含 ['close', 'log_return'] 两列，且严格只含当前决策时点
+             "之前"的观测（由调用方保证）。'close' 供 zigzag_label_regimes
+             识别价格转折点用；hist_df 本身整体在决策时点之前，因此 Zig-Zag
+             在这段历史内部使用"未来"确认转折点不构成对决策时点的前视。
+    window: [trend_W, vol_W] 的因果滚动窗口天数，默认21（约一个月）。
+    zigzag_kwargs: 透传给 zigzag_label_regimes 的参数覆盖（转折阈值/最小
+                   年化收益/最短时长/斜率比等），默认 None 即用其自身缺省值
+                   （转折阈值10%、最小年化收益20%、最短时长63天）。
+    返回: (assigner, regime_stats)，接口与 estimate_regime_params_causal 一致。
+    """
+    if duration_family not in ("geometric", "negbinom"):
+        raise ValueError(f"duration_family 必须是 'geometric' 或 'negbinom'，收到: {duration_family}")
+    if len(hist_df) < 120:
+        raise ValueError(
+            f"历史样本量({len(hist_df)})过小，zigzag规则标注需要足够长的历史"
+            f"才能切出有意义的趋势段，调用方应在样本不足时跳过重估。"
+        )
+
+    zigzag_kwargs = zigzag_kwargs or {}
+    labeled = zigzag_label_regimes(hist_df, **zigzag_kwargs)
+    named_labels = labeled["ref_regime"]
+
+    trend, vol = rolling_trend_vol_features(hist_df["log_return"].values, window=window)
+    feat = np.column_stack([trend, vol])
+    feature_scale = np.array([feat[:, 0].std(), feat[:, 1].std()])
+    feature_scale = np.where(feature_scale < 1e-8, 1.0, feature_scale)  # 数值保护
+
+    seg_stats = extract_segment_durations_from_labels(named_labels)
+    log_returns = hist_df["log_return"].values
+
+    prototypes, regime_stats = [], {}
+    for name in ["bull", "sideways", "bear"]:
+        mask = (named_labels == name).to_numpy()
+        if mask.sum() < 5:
+            continue
+        mean_feature = feat[mask].mean(axis=0)
+        cov = np.cov(feat[mask], rowvar=False) if mask.sum() > 1 else np.eye(feat.shape[1]) * 1e-6
+
+        durations = seg_stats.loc[seg_stats["regime"] == name, "duration"].values.astype(float)
+        mean_d = durations.mean() if len(durations) else float(window) * 2.0
+        var_d = durations.var(ddof=1) if len(durations) > 1 else mean_d * 2
+        duration_model = _refit_duration_like(duration_family, mean_d, var_d, max_duration,
+                                               name=f"{name}_{duration_family}")
+
+        prototypes.append(RegimePrototype(name=name, mean_feature=mean_feature, duration_model=duration_model,
+                                           cov=cov, n_obs=int(mask.sum())))
+        regime_stats[name] = {
+            "mu": float(log_returns[mask].mean()),
+            "sigma": float(log_returns[mask].std()),
+            "n_obs": int(mask.sum()),
+            "n_segments": len(durations),
+        }
+
+    if len(prototypes) < 3:
+        raise ValueError(
+            "规则标注在当前历史窗口内未能切出全部三个区制（样本量不足5天），"
+            "调用方应跳过本次重估、沿用上一版参数。"
+        )
+
+    target_exposures = calibrate_target_exposures(regime_stats, bounds=position_bounds)
+    for p in prototypes:
+        p.target_exposure = target_exposures[p.name]
+
+    assigner = RegimeSoftAssigner(prototypes, feature_scale=feature_scale, bandwidth=1.0, metric=metric)
+    return assigner, regime_stats
+
+
+def estimate_regime_params_multiaxis(hist_df: pd.DataFrame, k: int = 4, max_duration: int = 2000,
+                                      duration_family: str = "negbinom",
+                                      position_bounds: tuple = (0.0, 1.0),
+                                      metric: str = "mahalanobis",
+                                      t_stat_window: int = 21, extremity_m: int = 60,
+                                      extremity_lookback: int = 500, vol_lookback: int = 500,
+                                      kmeans_seed: int = 0,
+                                      prev_assigner: "RegimeSoftAssigner | None" = None,
+                                      min_cluster_frac: float = 0.03):
+    """
+    见 1.3区制分类的本质与约束.md 第9~13点：estimate_regime_params_causal
+    （KMeans聚[μ̂,σ̂]）退化严重，estimate_regime_params_rule_based（zigzag+
+    [trend_W,vol_W]）绕开了退化问题但只服务收益、久期端测不出区分度。
+
+    这是第三支实现：直接对三维特征[t_stat（强度）, extremity（透支）,
+    vol_level（波动率水平）]跑KMeans（K=4），三个特征都独立于BOCPD计算
+    （对应第12点"BOCPD与区制分类解耦"），也不依赖zigzag规则标注。
+    K=4 + 这三维特征组合，是经过feature_validation/脚本实证验证过的结果
+    （原始、未平滑的聚类即同时通过收益两两比较和久期日频卡方检验，且段长
+    尾部经零假设置换检验证明不是纯粹的滚动窗口机械假象），K=3同一特征组合
+    未通过久期端检验。
+
+    标准化沿用另两支估参函数的简单做法（对本次历史窗口算一次标量std，而非
+    rolling_standardize那种逐日滚动标准化）——RegimeSoftAssigner的feature_scale
+    机制本身就是"用一个固定尺度去除原始特征再算距离"，在线调用方只需要传入
+    原始[t_stat, extremity, vol_level]即可，不需要额外维护"冻结的滚动标准化参数"
+    这一层簿记，接口上与estimate_regime_params_rule_based完全一致。
+
+    【与验证阶段的差异，需明确记录】feature_validation/test_tier1_unified_
+    clustering.py验证K=4可行时，用的是rolling_standardize（逐日滚动标准化）；
+    这里为了跟另两支估参函数、RegimeSoftAssigner的既有接口保持一致，简化成了
+    标量标准化——这不是同一个东西，简化后的版本没有被单独重新跑过那一整套
+    验证（收益两两比较、久期日频卡方、段长零假设置换检验），当前只是"看起来
+    应该也行"，不是"已经验证过"。见1.3阶段性报告标注1。
+
+    hist_df: 必须包含 ['log_return', 'realized_vol'] 两列，且严格只含当前
+             决策时点"之前"的观测（由调用方保证）。
+
+    prev_assigner: 上一轮（上季度）的assigner，用于两件事，解决"KMeans每次
+      重新拟合、簇编号是任意的、按收益排名匹配可能因为排名偶然对调而张冠
+      李戴"这个问题：
+      ① 热启动：把prev_assigner各原型的mean_feature（原始量纲）按本次
+         feature_scale换算到标准化空间，作为KMeans的初始簇心（而非随机/
+         k-means++初始化），让新一轮拟合更容易收敛到"看起来还是同一批簇"
+         的结果，从源头减少编号被打乱的情况。
+      ② 命名：拟合完成后，不再用name_clusters_by_return_rank（按收益排名，
+         排名可能因噪声对调），改成把新簇心（原始量纲）与prev_assigner各
+         原型的mean_feature做全局最优的一一匹配（匈牙利算法，
+         scipy.optimize.linear_sum_assignment，按欧氏距离），新簇沿用匹配到
+         的旧原型的name——直接问"这个新簇的位置像不像上次哪个簇"，而不是
+         "收益排名像不像"。
+      传None（首次估参，没有上一轮可参照）或prev_assigner的原型数量与k不
+      一致时，退回原来的按收益排名命名（name_clusters_by_return_rank）。
+
+    min_cluster_frac: 热启动拟合后，若任一簇的样本占比低于这个阈值（默认3%，
+      视为退化/不稳定的拟合结果），放弃热启动结果，退回随机初始化重新拟合
+      （同时也放弃距离匹配命名，改回按收益排名命名）——避免热启动在某些
+      历史窗口里意外收敛到空簇或极小簇。
+
+    返回: (assigner, regime_stats)，接口与另两支估参函数一致。
+    """
+    if duration_family not in ("geometric", "negbinom"):
+        raise ValueError(f"duration_family 必须是 'geometric' 或 'negbinom'，收到: {duration_family}")
+    if len(hist_df) < max(120, k * 30):
+        raise ValueError(
+            f"历史样本量({len(hist_df)})过小，无法稳健估计{k}个区制的聚类与久期模型，"
+            f"调用方应在样本不足时跳过重估、沿用上一版参数。"
+        )
+
+    log_returns = hist_df["log_return"].to_numpy()
+    trend, vol = rolling_trend_vol_features(log_returns, window=t_stat_window)
+    t_stat = compute_t_stat(trend, vol, t_stat_window)
+    extremity = compute_extremity_percentile(log_returns, m=extremity_m, lookback=extremity_lookback)
+    vol_level = compute_rolling_percentile(hist_df["realized_vol"].to_numpy(), vol_lookback)
+
+    feat = np.column_stack([t_stat, extremity, vol_level])
+    feature_scale = feat.std(axis=0)
+    feature_scale = np.where(feature_scale < 1e-8, 1.0, feature_scale)
+    feat_std = feat / feature_scale
+
+    use_prev = prev_assigner is not None and len(prev_assigner.prototypes) == k
+    cluster_ids = None
+    if use_prev:
+        old_centers_raw = np.array([p.mean_feature for p in prev_assigner.prototypes])
+        old_centers_std = old_centers_raw / feature_scale
+        km_warm = KMeans(n_clusters=k, init=old_centers_std, n_init=1)
+        warm_ids = km_warm.fit_predict(feat_std)
+        smallest_frac = pd.Series(warm_ids).value_counts(normalize=True).min()
+        if smallest_frac >= min_cluster_frac:
+            cluster_ids = warm_ids
+        else:
+            use_prev = False  # 热启动退化成空簇/极小簇，放弃，走下面的随机初始化兜底
+
+    if cluster_ids is None:
+        km = KMeans(n_clusters=k, n_init=10, random_state=kmeans_seed)
+        cluster_ids = km.fit_predict(feat_std)
+
+    if use_prev:
+        new_centers_raw = np.array([feat[cluster_ids == c].mean(axis=0) for c in range(k)])
+        old_centers_raw = np.array([p.mean_feature for p in prev_assigner.prototypes])
+        cost = np.linalg.norm(new_centers_raw[:, None, :] - old_centers_raw[None, :, :], axis=2)
+        new_idx, old_idx = linear_sum_assignment(cost)
+        name_of = {int(new_c): prev_assigner.prototypes[int(old_c)].name
+                   for new_c, old_c in zip(new_idx, old_idx)}
+    else:
+        name_of = name_clusters_by_return_rank(cluster_ids, log_returns, k)
+    named_labels = pd.Series([name_of[c] for c in cluster_ids])
+
+    seg_stats = extract_segment_durations_from_labels(named_labels)
+    # 右截断处理（1.3文档第13点）：数据末尾仍未结束的最后一段剔除，不当完整段计入
+    # 久期拟合样本——否则会系统性低估段长（这段几乎必然还没走完，只是被窗口边缘
+    # 硬切断）。
+    seg_stats = seg_stats.iloc[:-1] if len(seg_stats) > 1 else seg_stats
+
+    prototypes, regime_stats = [], {}
+    for old_c, name in name_of.items():
+        mask = cluster_ids == old_c
+        mean_feature = feat[mask].mean(axis=0)
+        cov = np.cov(feat[mask], rowvar=False) if mask.sum() > 1 else np.eye(feat.shape[1]) * 1e-6
+
+        durations = seg_stats.loc[seg_stats["regime"] == name, "duration"].values.astype(float)
+        mean_d = durations.mean() if len(durations) else float(t_stat_window) * 2.0
+        var_d = durations.var(ddof=1) if len(durations) > 1 else mean_d * 2
+        duration_model = _refit_duration_like(duration_family, mean_d, var_d, max_duration,
+                                               name=f"{name}_{duration_family}")
+
+        prototypes.append(RegimePrototype(name=name, mean_feature=mean_feature, duration_model=duration_model,
+                                           cov=cov, n_obs=int(mask.sum())))
+        regime_stats[name] = {
+            "mu": float(log_returns[mask].mean()),
+            "sigma": float(log_returns[mask].std()),
+            "n_obs": int(mask.sum()),
+            "n_segments": len(durations),
+        }
+
+    target_exposures = calibrate_target_exposures(regime_stats, bounds=position_bounds)
+    for p in prototypes:
+        p.target_exposure = target_exposures[p.name]
+
     assigner = RegimeSoftAssigner(prototypes, feature_scale=feature_scale, bandwidth=1.0, metric=metric)
     return assigner, regime_stats
 

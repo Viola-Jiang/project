@@ -4,7 +4,7 @@ validation/regime_assignment_validation.py
 对应方法论文档 §3.6「区制识别与软分配」。这是组件级正确性/行为验证脚本，
 不是实际执行链路的一部分。
 
-真实数据没有上帝视角的区制标签，本脚本用 engine/regime_labeling 产出的
+真实数据没有上帝视角的区制标签，本脚本用 engine/zigzag_labeling 产出的
 ref_regime/ref_regime_age替代原先合成数据自带的真实标签。"监督原型"这一步
 现在准确的说法是"基于自动标注参照拟合的原型"——它仍然是一个诊断上限
 参照（因为用了全样本离线信息），但不再是oracle真值上限。

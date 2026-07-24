@@ -4,7 +4,7 @@ validation/duration_hazard_validation.py
 对应方法论文档 §3.4「HMM与HSMM」、§3.5「久期建模、hazard函数与预期剩余久期」。
 这是组件级正确性/行为验证脚本，不是实际执行链路的一部分。
 
-真实数据没有上帝视角的区制标签，本脚本从 engine/regime_labeling 产出的
+真实数据没有上帝视角的区制标签，本脚本从 engine/zigzag_labeling 产出的
 ref_regime里提取每个参照区制的历史段长样本。
 
 流程：

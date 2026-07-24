@@ -3,8 +3,9 @@ ablation/feature_dim_contrast.py
 ====================================
 补充对照实验：隔离"特征维度不同"这一个变量。
 
-背景：S1（离线HMM，理论上界）和 engine/regime_labeling.py（产出`ref_regime`
-参照标签）用的都是 [z, log(realized_vol)] 两维特征，但主链路（S2~S4实际跑的
+背景：S1（离线HMM，理论上界）用的是 [z, log(realized_vol)] 两维特征
+（`ref_regime`参照标签现由规则式的 `engine/zigzag_labeling.py` 产出，
+不依赖这两维特征），但主链路（S2~S4实际跑的
 engine/emission.py + engine/bocpd.py）只用一维 z——发射观测口径本身不对等。
 run_ablation_summary.py 里的 S1 vs S2、以及 lookahead_contrast.py 里的
 平滑vs滤波对照，都是在"两维特征"这个设定下测的，从未把"特征维度"本身当成

@@ -20,6 +20,7 @@ STEPS = [
     ("阶段1: 数据加载",       "ablation/01_data_loading.py",           True),
     ("阶段1: 特征工程",       "ablation/02_feature_engineering.py",    True),
     # validation
+    ("阶段2: 参照标签自检",   "validation/zigzag_label_selfcheck.py",       False),
     ("阶段2: 发射模型验证",   "validation/emission_validation.py",          False),
     ("阶段2: 久期模型验证",   "validation/duration_hazard_validation.py",   False),
     ("阶段2: BOCPD引擎验证",  "validation/bocpd_validation.py",             False),
@@ -29,6 +30,7 @@ STEPS = [
     # 可以在 PyCharm 里直接打开该脚本 Run。
     ("阶段3: 前视偏差对照",   "ablation/lookahead_contrast.py",       False),
     ("阶段3: 特征维度对照",   "ablation/feature_dim_contrast.py",     False),
+    ("阶段3: 特征维度对照(完全因果)", "ablation/feature_dim_causal_contrast.py", False),
     ("阶段3: 杠杆对照",       "ablation/leverage_contrast.py",        False),
     # 消融汇总放在回测报告之前：它会把S0~S4各级明细存成csv（含s4_hsmm_duration.csv），
     # backtest_report.py的§6.2会优先读这份缓存，不重新跑一遍S4（省时间，见其内部注释）。

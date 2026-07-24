@@ -4,8 +4,10 @@ engine/zigzag_labeling.py
 规则式参照标签：申万宏源《"趋势"、"震荡"环境的划分与择时策略》
 "1.1 信号的人工标注"的两阶段算法（Zig-Zag 粗筛 + Binseg 断点修正）。
 
-定位：`engine/regime_labeling.py`（离线全样本HMM）的替代实现。已定位到
-HMM 版标签几乎只按波动率分档、不含涨跌方向（bear 档年化 +4.4%），本模块
+定位：曾经的 HMM 版自动标注（`engine/regime_labeling.auto_label_regimes`，
+已因诊断发现几乎只按波动率分档、不含涨跌方向——bear 档年化 +4.4%——
+而被淘汰移除）的替代实现，现为 `ablation/02_feature_engineering.py`
+生产实际使用、产出 `ref_regime`/`ref_regime_age` 的唯一实现。本模块
 直接按价格走势方向划分，产出金融意义上的 bull / bear / sideways 三态。
 
 与 HMM 版同样属于**离线参照标签**：允许使用全样本信息（Zig-Zag 的转折点
@@ -157,11 +159,11 @@ def zigzag_label_regimes(df: pd.DataFrame,
                           min_segment_days: int = 5) -> pd.DataFrame:
     """
     输入: df 至少包含 ['close'] 列（收盘价，按日期升序）。
-    输出: df 的副本，新增 ref_regime / ref_regime_age 两列，
-          口径与 regime_labeling.auto_label_regimes 完全一致，可直接替换。
+    输出: df 的副本，新增 ref_regime / ref_regime_age 两列
+          （`ablation/02_feature_engineering.py` 生产实际调用此函数产出这两列）。
 
     min_segment_days: 修正后可能出现极短的标签碎段，复用
-    _merge_short_segments 做与 HMM 版一致的短段合并（0/1 关闭）。
+    _merge_short_segments 做短段合并（0/1 关闭）。
     """
     prices = df["close"].to_numpy(dtype=float)
     log_prices = np.log(prices)

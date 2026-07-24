@@ -4,8 +4,8 @@ validation/emission_validation.py
 对应方法论文档 §3.3「共轭发射与 Student-t 预测分布」。
 这是组件级正确性/行为验证脚本，不是实际执行链路的一部分。
 
-真实数据没有上帝视角的区制标签，下文中 B/C 两类验证改用 engine/regime_labeling
-产出的 ref_regime/ref_regime_age——离线全样本HMM给出的**参照标签。
+真实数据没有上帝视角的区制标签，下文中 B/C 两类验证改用 engine/zigzag_labeling
+产出的 ref_regime/ref_regime_age——规则式（允许全样本前视）给出的**参照标签。
 
 三类验证：
   A. 正确性校验：在线增量递归 vs 批量闭式公式，误差应 < 1e-8。

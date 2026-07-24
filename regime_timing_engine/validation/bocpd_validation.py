@@ -11,7 +11,7 @@ validation/bocpd_validation.py
   段落（不分区制）汇总拟合"的泛化久期分布，这是一个过渡性近似，
   regime_assignment_validation.py 会替换为"按区制混合"的 hazard。
 
-真实数据没有上帝视角的区制标签，本脚本用 engine/regime_labeling 产出的
+真实数据没有上帝视角的区制标签，本脚本用 engine/zigzag_labeling 产出的
 ref_regime/ref_regime_age作为评估检测滞后时的参照变点位置。
 
 验证内容：
